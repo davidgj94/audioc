@@ -31,6 +31,9 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "audiocArgs.h"
 #include "circularBuffer.h"
@@ -79,7 +82,6 @@ void main(int argc, char *argv[])
     new variables
      ***************************************/
 
-    int multicastIp; /* 32-bit int containing the multicast addr. */
     unsigned int ssrc;          /* Returns local SSRC value */
     int port;         /* Returns port to be used in the communication */ 
     int vol;          /* Returns volume requested (for both playing and 
@@ -102,6 +104,7 @@ void main(int argc, char *argv[])
     fd_set conjunto_lectura;
     int sockId;
     int file;
+    struct in_addr multicastIp;
 
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
@@ -193,7 +196,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    sockId = easy_init();
+    sockId = easy_init(multicastIp);
     int res;
 
     while(1){

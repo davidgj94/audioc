@@ -29,22 +29,33 @@ host1 and host2 can be executed in any host with multicast connectivity between 
 
 int sockId;
 int result;         /* for storing results from system calls */
-struct sockaddr_in localSAddr, remToSendSAddr, remToRecvSAddr; /* to build address/port info for local node and remote node */ 
+struct sockaddr_in remToSendSAddr, remToRecvSAddr; /* to build address/port info for local node and remote node */ 
 
 struct ip_mreq mreq;/* for multicast configuration */
 socklen_t sockAddrInLength;/* to store the length of the address returned by recvfrom */
 
-int easy_init(void){
+int easy_init(struct in_addr multicastIp){
 
     /* preparing bind */
-    bzero(&localSAddr, sizeof(localSAddr));
-    localSAddr.sin_family = AF_INET;
-    localSAddr.sin_port = htons(PORT); /* besides filtering, this assures that info is being sent with this PORT as local port */
-    /* fill .sin_addr with multicast address */
-    if (inet_pton(AF_INET, GROUP, &localSAddr.sin_addr) < 0) {
-        printf("inet_pton error\n");
-        return -1;
-    }
+    // bzero(&localSAddr, sizeof(localSAddr));
+    // localSAddr.sin_family = AF_INET;
+    // localSAddr.sin_port = htons(PORT); /* besides filtering, this assures that info is being sent with this PORT as local port */
+    // multicastAddr.sin_addr = multicastIp;
+    // /* fill .sin_addr with multicast address */
+    // if (inet_pton(AF_INET, GROUP, &localSAddr.sin_addr) < 0) {
+    //     printf("inet_pton error\n");
+    //     return -1;
+    // }
+
+    bzero(&remToSendSAddr, sizeof(remToSendSAddr));
+    remToSendSAddr.sin_family = AF_INET;
+    remToSendSAddr.sin_port = htons(PORT);
+    remToSendSAddr.sin_addr = multicastIp;
+
+    // if (inet_pton(AF_INET, GROUP, &remToSendSAddr.sin_addr) < 0) {
+    //     printf("inet_pton error\n");
+    //     return -1; /* failure */
+    // }
 
     /* creating socket */
     if ((sockId = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -60,17 +71,19 @@ int easy_init(void){
     }
 
     /* binding socket - using mcast localSAddr address */
-    if (bind(sockId, (struct sockaddr *)&localSAddr, sizeof(struct sockaddr_in)) < 0) {
+    if (bind(sockId, (struct sockaddr *)&remToSendSAddr, sizeof(struct sockaddr_in)) < 0) {
         printf("bind error\n");
         return -1;
     }
 
     /* setsockopt configuration for joining to mcast group */
-    if (inet_pton(AF_INET, GROUP, &mreq.imr_multiaddr) < 0) {
-        printf("inet_pton");
-        return -1;
-    }
+    mreq.imr_multiaddr = multicastIp;
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    // if (inet_pton(AF_INET, GROUP, &mreq.imr_multiaddr) < 0) {
+    //     printf("inet_pton");
+    //     return -1;
+    // }
+    
 
     if (setsockopt(sockId, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
         printf("setsockopt error");
@@ -78,14 +91,7 @@ int easy_init(void){
     }
 
     /* building structure to identify address/port of the remote node in order to send data to it */
-    bzero(&remToSendSAddr, sizeof(remToSendSAddr));
-
-    remToSendSAddr.sin_family = AF_INET;
-    remToSendSAddr.sin_port = htons(PORT);
-    if (inet_pton(AF_INET, GROUP, &remToSendSAddr.sin_addr) < 0) {
-        printf("inet_pton error\n");
-        return -1; /* failure */
-    }
+    
 
     unsigned char loop=0;
 
