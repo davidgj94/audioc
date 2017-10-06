@@ -1,14 +1,13 @@
 /*******************************************************/
-/* easyUDPSockets_1.h */
+/* easyUDPSockets.h */
 /*******************************************************/
 
 #define PORT 5000
 #define GROUP "225.0.1.29"
 #define MAXBUF 256
 
-int easy_init_1(void);
+int easy_init(void);
 
-int easy_send_1(char * message);
+int easy_send(char * message);
 
-int easy_receive_1(char * buff);
-
+int easy_receive(char * buff);
