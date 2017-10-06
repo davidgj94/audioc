@@ -87,7 +87,11 @@ int easy_init(void){
         return -1; /* failure */
     }
 
-    return 0;
+    unsigned char loop=0;
+
+    setsockopt(sockId, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(unsigned char));
+
+    return sockId;
 
 }
 

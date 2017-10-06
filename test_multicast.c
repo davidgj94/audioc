@@ -1,3 +1,5 @@
+// gcc -Wall -Wextra -o audioc easyUDPSockets.c test_multicast.c
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <signal.h>

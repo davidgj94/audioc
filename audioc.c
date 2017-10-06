@@ -35,7 +35,7 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c aud
 #include "audiocArgs.h"
 #include "circularBuffer.h"
 #include "configureSndcard.h"
-// #include "easyUDPSockets.h"
+#include "easyUDPSockets.h"
 
 void record (int descSnd, const char *fileName, int fragmentSize);
 void play (int descSnd, const char *fileName, int fragmentSize);
@@ -43,6 +43,7 @@ void play (int descSnd, const char *fileName, int fragmentSize);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
+const *char fileName_audio = "prueba.txt";
 
 /* only declare here variables which are used inside the signal handler */
 char *buf = NULL;
@@ -56,48 +57,6 @@ void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unu
     if (fileName) free(fileName);
     exit (0);
 }
-
-// // void send(int descSnd, int fragmentSize){
-
-// //     int bytesRead;
-// //     printf("entro");
-
-// //     if(easy_init_1() < 0){
-// //         printf("easy_init_1");
-// //         exit(1);
-// //     }
-
-// //     buf = malloc (fragmentSize); 
-// //     if (buf == NULL) { 
-// //         printf("Could not reserve memory for audio data.\n"); 
-// //         exit (1); /* very unusual case */ 
-// //     }
-
-// //     while (1) 
-// //     { /* until Ctrl-C */
-// //         bytesRead = read (descSnd, buf, fragmentSize); 
-// //         if (bytesRead!= fragmentSize)
-// //             printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-// //         printf (".");fflush (stdout);
-
-// //         // bytesRead = write (file, buf, fragmentSize);
-// //         // if (bytesRead!= fragmentSize)
-// //         //     printf("Written in file a different number of bytes than expected");
-
-// //         if(easy_send_1(buf) < 0){
-// //             printf("easy_send_1");
-// //             exit(1);
-// //         }
-
-// //     }
-
-
-
-    
-
-// }
-
-
 
 
 void main(int argc, char *argv[])
@@ -140,6 +99,10 @@ void main(int argc, char *argv[])
     float aux1;
     int aux2;
 
+    fd_set conjunto_lectura;
+    int sockId;
+    int file;
+
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
     sigInfo.sa_flags = 0; 
@@ -149,20 +112,9 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
+    
     /****************************************
-    old capture args
-     ***************************************/
-
-    // /* obtain values from the command line - or default values otherwise */
-    // if (-1 == args_capture (argc, argv, &audioSimpleOperation, &sndCardFormat, 
-    //         &channelNumber, &rate, &vol, &requestedFragmentSize, &fileName))
-    // { exit(1);  /* there was an error parsing the arguments, the error type 
-    //                is printed by the args_capture function */
-    // };
-
-
-    /****************************************
-    new capture args
+    capture args
      ***************************************/
 
     /* obtain values from the command line - or default values otherwise */
@@ -216,24 +168,6 @@ void main(int argc, char *argv[])
     printFragmentSize (descriptorSnd);
     printf ("Duration of each packet exchanged with the soundcard :%f\n", (float) requestedFragmentSize / (float) (channelNumber * sndCardFormat / BITS_PER_BYTE) * rate);
 
-    /****************************************
-    old args_print
-     ***************************************/
-
-    // /* obtained values -may differ slightly - eg. frequency - from requested values */
-    // args_print(audioSimpleOperation, sndCardFormat, channelNumber, rate, vol, requestedFragmentSize, fileName);
-    // printFragmentSize (descriptorSnd);
-    // printf ("Duration of each packet exchanged with the soundcard :%f\n", (float) requestedFragmentSize / (float) (channelNumber * sndCardFormat / BITS_PER_BYTE) * rate); /* note that in this case sndCardFormat is ALSO the number of bits of the format, this may not be the case */
-
-    /****************************************
-    old audioSimpleOperation chunk of code
-     ***************************************/
-
-    // if (audioSimpleOperation == RECORD)
-    //     record (descriptorSnd, fileName, requestedFragmentSize);  this function - and the following functions - are coded in configureSndcard 
-    // else if (audioSimpleOperation == PLAY)
-    //     play (descriptorSnd, fileName, requestedFragmentSize);
-
 
     /****************************************
     create circular buffer
@@ -245,7 +179,47 @@ void main(int argc, char *argv[])
     create circular buffer
      ***************************************/
     //send(descriptorSnd, requestedFragmentSize);
-    record (descriptorSnd,"asdf.txt", requestedFragmentSize);
+    //record (descriptorSnd,"asdf.txt", requestedFragmentSize);
+
+    buf = malloc (fragmentSize); 
+    if (buf == NULL) { 
+        printf("Could not reserve memory for audio data.\n"); 
+        exit (1); /* very unusual case */ 
+    }
+
+    /* opens file in read-only mode */
+    if ((file = open (fileName_audio, O_RDONLY)) < 0) {
+        printf("File could not be opened, error %s", strerror(errno));
+        exit(1);
+    }
+
+    sockId = easy_init();
+    while(1){
+        FD_ZERO(&conjunto_lectura);
+        FD_SET(descriptorSnd, &conjunto_lectura);
+        FD_SET(sockId, &conjunto_lectura);
+        if ((res = select (FD_SETSIZE, &conjunto_lectura, NULL, NULL, NULL)) <0) {
+            printf("Fallo select");
+        }else if(res==0){
+            printf("Fallo timer");
+        }else{
+            if(FD_ISSET (descriptorSnd, &conjunto_lectura) == 1){
+                update_buffer(descriptorSnd, requestedFragmentSize);
+                easy_send(buf)
+                printf("nuevo audio tarjeta");
+            }
+
+            if(FD_ISSET (sockId, &conjunto_lectura) == 1){
+                update_buffer(sockId, requestedFragmentSize);
+                record(file, requestedFragmentSize);
+                printf("nuevo audio socket");
+
+            }
+
+        }
+
+    }
+        
 
 
 
@@ -259,74 +233,53 @@ void main(int argc, char *argv[])
  * and stores them in the file opened.
  * If an error is found in the configuration of the soundcard, 
  * the process is stopped and an error message reported. */  
-void record (int descSnd, const char * fileName, int fragmentSize)
+
+void record (int file, int fragmentSize)
 {
-    int file;
     int bytesRead;
+    bytesRead = write (file, buf, fragmentSize);
+    // if (bytesRead!= fragmentSize)
+    //     printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    // printf (".");fflush (stdout);
+}
 
-    /* Creates buffer to store the audio data */
-
-    buf = malloc (fragmentSize); 
-    if (buf == NULL) { 
-        printf("Could not reserve memory for audio data.\n"); 
-        exit (1); /* very unusual case */ 
-    }
-
-    /* opens file for writing */
-    if ((file = open  (fileName, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU)) < 0) {
-        printf("Error creating file for writing, error: %s", strerror(errno));
-        exit(1);
-    }
-
-    /* If it would be needed to store inside the file some data 
-     * to represent the audio format, this should be the place */
-
-    printf("Recording in blocks of %d bytes... :\n", fragmentSize);
-
-    while (1) 
-    { /* until Ctrl-C */
-        bytesRead = read (descSnd, buf, fragmentSize); 
-        if (bytesRead!= fragmentSize)
-            printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-        printf (".");fflush (stdout);
-
-        bytesRead = write (file, buf, fragmentSize);
-        if (bytesRead!= fragmentSize)
-            printf("Written in file a different number of bytes than expected"); 
-    }
+void update_buffer(int descriptor, int fragmentSize){
+    int bytesRead;
+    bytesRead = read (descriptor, buf, fragmentSize); 
+    // if (bytesRead!= fragmentSize)
+    //     printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    // printf (".");fflush (stdout);
 }
 
 /* This function opens an existing file 'fileName'. It reads 'fragmentSize'
  * bytes and sends them to the soundcard, for playback
  * If an error is found in the configuration of the soundcard, the process 
  * is stopped and an error message reported. */
-void play (int descSnd, const char * fileName, int fragmentSize)
-{
-    int file;
-    int bytesRead;
+// void play (int descSnd, const char * fileName, int fragmentSize)
+// {
+//     int file;
+//     int bytesRead;
 
-    /* Creates buffer to store the audio data */
-    buf = malloc (fragmentSize); 
-    if (buf == NULL) { printf("Could not reserve memory for audio data.\n"); exit (1); /* very unusual case */ }
+//     /* Creates buffer to store the audio data */
+//     buf = malloc (fragmentSize); 
+//     if (buf == NULL) { printf("Could not reserve memory for audio data.\n"); exit (1); /* very unusual case */ }
 
-    /* opens file in read-only mode */
-    if ((file = open (fileName, O_RDONLY)) < 0) {
-        printf("File could not be opened, error %s", strerror(errno));
-        exit(1);
-    }
+    
 
-    /* If you need to read from the file and process the audio format, this could be the place */
+//      //If you need to read from the file and process the audio format, this could be the place 
 
-    printf("Playing in blocks of %d bytes... :\n", fragmentSize);
+//     printf("Playing in blocks of %d bytes... :\n", fragmentSize);
 
-    while (1)
-    { 
-        bytesRead = read (file, buf, fragmentSize);
-        if (bytesRead != fragmentSize)
-            break; /* reached end of file */
+//     while (1)
+//     { 
+//         bytesRead = read (file, buf, fragmentSize);
+//         if (bytesRead != fragmentSize)
+//             break; /* reached end of file */
 
-        bytesRead = write (descSnd, buf, fragmentSize); 
-        if (bytesRead!= fragmentSize)
-            printf ("Played a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    }
-};
+//         bytesRead = write (descSnd, buf, fragmentSize); 
+//         if (bytesRead!= fragmentSize)
+//             printf ("Played a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+//     }
+// };
+
+
