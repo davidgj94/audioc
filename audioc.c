@@ -18,7 +18,7 @@ RATE sampling rate in Hz
 
 default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block 
 
-gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c audioc.c
+gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets.c audioc.c
 */
 
 #include <stdbool.h>
@@ -37,13 +37,13 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c aud
 #include "configureSndcard.h"
 #include "easyUDPSockets.h"
 
-void record (int descSnd, const char *fileName, int fragmentSize);
-void play (int descSnd, const char *fileName, int fragmentSize);
+void record (int file, int fragmentSize);
+void update_buffer(int descriptor, int fragmentSize);
 
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
-const *char fileName_audio = "prueba.txt";
+const char *fileName_audio = "prueba.txt";
 
 /* only declare here variables which are used inside the signal handler */
 char *buf = NULL;
@@ -181,7 +181,7 @@ void main(int argc, char *argv[])
     //send(descriptorSnd, requestedFragmentSize);
     //record (descriptorSnd,"asdf.txt", requestedFragmentSize);
 
-    buf = malloc (fragmentSize); 
+    buf = malloc (requestedFragmentSize); 
     if (buf == NULL) { 
         printf("Could not reserve memory for audio data.\n"); 
         exit (1); /* very unusual case */ 
@@ -194,6 +194,8 @@ void main(int argc, char *argv[])
     }
 
     sockId = easy_init();
+    int res;
+
     while(1){
         FD_ZERO(&conjunto_lectura);
         FD_SET(descriptorSnd, &conjunto_lectura);
@@ -205,7 +207,7 @@ void main(int argc, char *argv[])
         }else{
             if(FD_ISSET (descriptorSnd, &conjunto_lectura) == 1){
                 update_buffer(descriptorSnd, requestedFragmentSize);
-                easy_send(buf)
+                easy_send(buf);
                 printf("nuevo audio tarjeta");
             }
 

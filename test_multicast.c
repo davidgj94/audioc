@@ -1,4 +1,5 @@
-// gcc -Wall -Wextra -o audioc easyUDPSockets.c test_multicast.c
+// gcc -Wall -Wextra -o test_multicast easyUDPSockets.c test_multicast.c
+// ./audioc 227.3.4.5 4532
 
 #include <stdbool.h>
 #include <stdio.h>
