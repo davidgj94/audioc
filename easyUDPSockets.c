@@ -102,7 +102,7 @@ int easy_send(char * message){
     if ( (result = sendto(sockId, message, sizeof(message), /* flags */ 0, (struct sockaddr *) &remToSendSAddr, sizeof(remToSendSAddr)))<0) {
         printf("sendto error\n");
     } else {
-        printf("Message sent to group\n"); 
+        //printf("Message sent to group\n"); 
     }
 
     return result;
@@ -118,7 +118,7 @@ int easy_receive(char * buff){
         printf ("recvfrom error\n");
     } else {
         buff[result] = 0; /* convert to 'string' by appending a 0 value (equal to '\0') after the last received character */
-        printf("Message received from group\nMessage is: %s\n", buff); fflush (stdout);
+        //printf("Message received from group\nMessage is: %s\n", buff); fflush (stdout);
     }
 
     return result;
