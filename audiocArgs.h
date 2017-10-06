@@ -14,7 +14,7 @@ enum payload {PCMU=100,  L16_1=11};
  * the problem observed.
  * Returns EXIT_SUCCESS if it could parse the arguments correctly */
 int  args_capture_audioc ( int argc, char *argv[], 
-	struct in_addr *multicastIp, /* 32-bit int containing the multicast addr. */
+	int *multicastIp, /* 32-bit int containing the multicast addr. */
 	unsigned int *ssrc,          /* Returns local SSRC value */
 	int *port,          /* Returns port to be used in the communication */ 
 	int *vol,           /* Returns volume requested (for both playing and 

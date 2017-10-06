@@ -18,7 +18,7 @@ RATE sampling rate in Hz
 
 default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block 
 
-gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets_1.c audioc.c
+gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c audioc.c
 */
 
 #include <stdbool.h>
@@ -35,7 +35,7 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include "audiocArgs.h"
 #include "circularBuffer.h"
 #include "configureSndcard.h"
-#include "easyUDPSockets_1.h"
+// #include "easyUDPSockets.h"
 
 void record (int descSnd, const char *fileName, int fragmentSize);
 void play (int descSnd, const char *fileName, int fragmentSize);
@@ -57,45 +57,45 @@ void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unu
     exit (0);
 }
 
-void send(int descSnd, int fragmentSize){
+// // void send(int descSnd, int fragmentSize){
 
-    int bytesRead;
-    printf("entro");
+// //     int bytesRead;
+// //     printf("entro");
 
-    if(easy_init_1() < 0){
-        printf("easy_init_1");
-        exit(1);
-    }
+// //     if(easy_init_1() < 0){
+// //         printf("easy_init_1");
+// //         exit(1);
+// //     }
 
-    buf = malloc (fragmentSize); 
-    if (buf == NULL) { 
-        printf("Could not reserve memory for audio data.\n"); 
-        exit (1); /* very unusual case */ 
-    }
+// //     buf = malloc (fragmentSize); 
+// //     if (buf == NULL) { 
+// //         printf("Could not reserve memory for audio data.\n"); 
+// //         exit (1); /* very unusual case */ 
+// //     }
 
-    while (1) 
-    { /* until Ctrl-C */
-        bytesRead = read (descSnd, buf, fragmentSize); 
-        if (bytesRead!= fragmentSize)
-            printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-        printf (".");fflush (stdout);
+// //     while (1) 
+// //     { /* until Ctrl-C */
+// //         bytesRead = read (descSnd, buf, fragmentSize); 
+// //         if (bytesRead!= fragmentSize)
+// //             printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+// //         printf (".");fflush (stdout);
 
-        // bytesRead = write (file, buf, fragmentSize);
-        // if (bytesRead!= fragmentSize)
-        //     printf("Written in file a different number of bytes than expected");
+// //         // bytesRead = write (file, buf, fragmentSize);
+// //         // if (bytesRead!= fragmentSize)
+// //         //     printf("Written in file a different number of bytes than expected");
 
-        if(easy_send_1(buf) < 0){
-            printf("easy_send_1");
-            exit(1);
-        }
+// //         if(easy_send_1(buf) < 0){
+// //             printf("easy_send_1");
+// //             exit(1);
+// //         }
 
-    }
+// //     }
 
 
 
     
 
-}
+// }
 
 
 
@@ -103,7 +103,6 @@ void send(int descSnd, int fragmentSize){
 void main(int argc, char *argv[])
 {
     struct sigaction sigInfo; /* signal conf */
-    fd_set conjunto_lectura, conjunto_escritura;
 
     /****************************************
     old variables
@@ -245,8 +244,8 @@ void main(int argc, char *argv[])
     /****************************************
     create circular buffer
      ***************************************/
-    printf("entro1");
-    send(descriptorSnd, requestedFragmentSize);
+    //send(descriptorSnd, requestedFragmentSize);
+    record (descriptorSnd,"asdf.txt", requestedFragmentSize);
 
 
 
