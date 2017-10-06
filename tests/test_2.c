@@ -1,7 +1,13 @@
+#include <stdbool.h>
 #include <stdio.h>
-#include <easyUDPSockets_2.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
 
-#define MAXBUF 256
+#include "easyUDPSockets_2.h"
 
 const char message[16]= "Sent from host2";
 char buf[MAXBUF]; /* to receive data from remote node */

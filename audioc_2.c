@@ -18,7 +18,7 @@ RATE sampling rate in Hz
 
 default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block 
 
-gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets_1.c audioc.c
+gcc -Wall -Wextra -o audioc_2 audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets_2.c audioc_2.c
 */
 
 #include <stdbool.h>
@@ -29,13 +29,11 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/time.h>
-#include <sys/types.h>
 
 #include "audiocArgs.h"
 #include "circularBuffer.h"
 #include "configureSndcard.h"
-#include "easyUDPSockets_1.h"
+#include "easyUDPSockets_2.h"
 
 void record (int descSnd, const char *fileName, int fragmentSize);
 void play (int descSnd, const char *fileName, int fragmentSize);
@@ -43,6 +41,7 @@ void play (int descSnd, const char *fileName, int fragmentSize);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
+const char file_audio[] = "prueba.txt";
 
 /* only declare here variables which are used inside the signal handler */
 char *buf = NULL;
@@ -57,53 +56,45 @@ void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unu
     exit (0);
 }
 
-void send(int descSnd, int fragmentSize){
 
+void receive(int fragmentSize){
+
+    int file;
     int bytesRead;
-    printf("entro");
 
-    if(easy_init_1() < 0){
-        printf("easy_init_1");
+    if(easy_init_2() < 0){
+        printf("easy_init_2");
         exit(1);
     }
 
-    buf = malloc (fragmentSize); 
-    if (buf == NULL) { 
-        printf("Could not reserve memory for audio data.\n"); 
-        exit (1); /* very unusual case */ 
+    buf = malloc (fragmentSize);
+
+    /* opens file for writing */
+    if ((file = open  (file_audio, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU)) < 0) {
+        printf("Error creating file for writing, error: %s", strerror(errno));
+        exit(1);
     }
 
     while (1) 
     { /* until Ctrl-C */
-        bytesRead = read (descSnd, buf, fragmentSize); 
-        if (bytesRead!= fragmentSize)
-            printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-        printf (".");fflush (stdout);
-
-        // bytesRead = write (file, buf, fragmentSize);
-        // if (bytesRead!= fragmentSize)
-        //     printf("Written in file a different number of bytes than expected");
-
-        if(easy_send_1(buf) < 0){
-            printf("easy_send_1");
+        if(easy_receive_2(buf) < 0){
+            printf("easy_receive_2");
             exit(1);
         }
-
+        bytesRead = write (file, buf, fragmentSize);
+        // if (bytesRead!= fragmentSize){
+        //     printf("Written in file a different number of bytes than expected"); 
+        //     exit(1);
+        // }
+            
     }
 
-
-
-    
-
 }
-
-
 
 
 void main(int argc, char *argv[])
 {
     struct sigaction sigInfo; /* signal conf */
-    fd_set conjunto_lectura, conjunto_escritura;
 
     /****************************************
     old variables
@@ -215,7 +206,7 @@ void main(int argc, char *argv[])
 
     args_print_audioc(multicastIp, ssrc, port, packetDuration, payload, bufferingTime, vol, verbose);
     printFragmentSize (descriptorSnd);
-    printf ("Duration of each packet exchanged with the soundcard :%f\n", (float) requestedFragmentSize / (float) (channelNumber * sndCardFormat / BITS_PER_BYTE) * rate);
+    //printf ("Duration of each packet exchanged with the soundcard :%f\n", (float) requestedFragmentSize / (float) (channelNumber * sndCardFormat / BITS_PER_BYTE) * rate);
 
     /****************************************
     old args_print
@@ -243,10 +234,10 @@ void main(int argc, char *argv[])
     //void * buffer = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
 
     /****************************************
-    create circular buffer
+    receive and store in file
      ***************************************/
-    printf("entro1");
-    send(descriptorSnd, requestedFragmentSize);
+
+    receive(requestedFragmentSize);
 
 
 

@@ -48,7 +48,7 @@ static void _defaultValues (int *port, int *vol, int *packetDuration, int *verbo
 
 
 /*=====================================================================*/
-int args_capture_audioc(int argc, char * argv[], int *multicastIp, unsigned int *ssrc, int *port, int *vol, int *packetDuration, int *verbose, int *payload, int *bufferingTime)
+int args_capture_audioc(int argc, char * argv[], struct in_addr *multicastIp, unsigned int *ssrc, int *port, int *vol, int *packetDuration, int *verbose, int *payload, int *bufferingTime)
 {
     int index;
     char car;

@@ -74,7 +74,6 @@ int easy_send_1(char * message){
     if ( (result = sendto(sockId, message, sizeof(message), /* flags */ 0, (struct sockaddr *) &remToSendSAddr, sizeof(remToSendSAddr)))<0) {
         printf("sendto error\n");
     } else {
-        buf[result] = 0;
         printf("Host1: Using sendto to send data to multicast destination\n"); 
     }
 
@@ -88,12 +87,14 @@ int easy_receive_1(char * buff){
        However, we need to provide in advance the maximum amount of memory which recvfrom can use starting from the 'remToRecv' pointer - to allow recvfrom to be sure that it does not exceed the available space. To do so, we need to provide the size of the 'remToRecv' variable */
     sockAddrInLength = sizeof (struct sockaddr_in); 
 
+    buff[result] = 0;
+
     /* receives from any who wishes to send to host1 in this port */  
     if ((result= recvfrom(sockId, buff, MAXBUF, 0, (struct sockaddr *) &remToRecvSAddr, &sockAddrInLength)) < 0) {
         printf("recvfrom error\n");
     } else {
-        buf[result] = 0;
-        printf("Host1: Message received from unicast address. The message is: %s\n", buf); 
+        buff[result] = 0;
+        printf("Host1: Message received from unicast address. The message is: %s\n", buff); 
     }
 
     return result;

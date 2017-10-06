@@ -25,6 +25,8 @@ host1 and host2 can be executed in any host with multicast connectivity between 
 #include <strings.h>
 #include <stdlib.h>
 
+#include "easyUDPSockets_2.h"
+
 int sockId;
 int result;         /* for storing results from system calls */
 struct sockaddr_in localSAddr, remoteSAddr; /* to build address/port info for local node and remote node */ 
@@ -85,7 +87,6 @@ int easy_send_2(char * message){
     if ( (result = sendto(sockId, message, sizeof(message), /* flags */ 0, (struct sockaddr *) &remoteSAddr, sizeof(remoteSAddr)))<0) {
         printf ("sendto error\n");
     } else {
-        buf[result] = 0;
         printf("Host2: Sent message to UNIcast address\n"); fflush (stdout);
     }
 
@@ -94,11 +95,14 @@ int easy_send_2(char * message){
 
 int easy_receive_2(char * buff){
     sockAddrInLength = sizeof (struct sockaddr_in); /* remember always to set the size of the rem variable in from_len */   
-    if ((result = recvfrom(sockId, buf, MAXBUF, 0, (struct sockaddr *) &remoteSAddr, &sockAddrInLength)) < 0) {
+
+    buff[result] = 0;
+
+    if ((result = recvfrom(sockId, buff, MAXBUF, 0, (struct sockaddr *) &remoteSAddr, &sockAddrInLength)) < 0) {
         printf ("recvfrom error\n");
     } else {
-        buf[result] = 0; /* convert to 'string' by appending a 0 value (equal to '\0') after the last received character */
-        printf("Host2: Received message in multicast address. Message is: %s\n", buf); fflush (stdout);
+        buff[result] = 0; /* convert to 'string' by appending a 0 value (equal to '\0') after the last received character */
+        printf("Host2: Received message in multicast address. Message is: %s\n", buff); fflush (stdout);
     }
 
     return result;
