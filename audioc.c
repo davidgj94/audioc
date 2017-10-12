@@ -166,6 +166,7 @@ void main(int argc, char *argv[])
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
+                printf("entro");
                 update_buffer(sockId, requestedFragmentSize);
                 play(descriptorSnd, requestedFragmentSize);
             }
