@@ -203,43 +203,41 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    printf("%d\n", file);
-
-    // sockId = easy_init(multicastIp);
-    // int res;
-
-    // while(1){
-    //     FD_ZERO(&conjunto_lectura);
-    //     FD_SET(descriptorSnd, &conjunto_lectura);
-    //     FD_SET(sockId, &conjunto_lectura);
-    //     if ((res = select (FD_SETSIZE, &conjunto_lectura, NULL, NULL, NULL)) <0) {
-    //         printf("Fallo select");
-    //     }else if(res==0){
-    //         printf("Fallo timer");
-    //     }else{
-    //         if(FD_ISSET (descriptorSnd, &conjunto_lectura) == 1){
-    //             update_buffer(descriptorSnd, requestedFragmentSize);
-    //             easy_send(buf);
-    //             printf("nuevo audio tarjeta");
-    //         }
-
-    //         if(FD_ISSET (sockId, &conjunto_lectura) == 1){
-    //             update_buffer(sockId, requestedFragmentSize);
-    //             record(file, requestedFragmentSize);
-    //             printf("nuevo audio socket");
-
-    //         }
-
-    //     }
-
-    // }
-
+    sockId = easy_init(multicastIp);
+    int res;
 
     while(1){
-        update_buffer(descriptorSnd, requestedFragmentSize);
-        record(file, requestedFragmentSize);
-        printf("Grabando ...");
+        FD_ZERO(&conjunto_lectura);
+        FD_SET(descriptorSnd, &conjunto_lectura);
+        FD_SET(sockId, &conjunto_lectura);
+        if ((res = select (FD_SETSIZE, &conjunto_lectura, NULL, NULL, NULL)) <0) {
+            printf("Fallo select");
+        }else if(res==0){
+            printf("Fallo timer");
+        }else{
+            if(FD_ISSET (descriptorSnd, &conjunto_lectura) == 1){
+                update_buffer(descriptorSnd, requestedFragmentSize);
+                easy_send(buf);
+                printf("nuevo audio tarjeta");
+            }
+
+            if(FD_ISSET (sockId, &conjunto_lectura) == 1){
+                update_buffer(sockId, requestedFragmentSize);
+                record(file, requestedFragmentSize);
+                printf("nuevo audio socket");
+
+            }
+
+        }
+
     }
+
+
+    // while(1){
+    //     update_buffer(descriptorSnd, requestedFragmentSize);
+    //     record(file, requestedFragmentSize);
+    //     printf("Grabando ...");
+    // }
         
 
 
