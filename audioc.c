@@ -182,19 +182,17 @@ void main(int argc, char *argv[])
 void play(int descriptor, int fragmentSize){
     int bytesRead;
     bytesRead = write (descriptor, buf, fragmentSize);
-    printf("**********%d\n", bytesRead);
-    //if (bytesRead!= fragmentSize)
-        //printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    //printf (".");fflush (stdout);
+    if (bytesRead!= fragmentSize)
+        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    printf (".");fflush (stdout);
 }
 
 void update_buffer(int descriptor, int fragmentSize){
     int bytesRead;
     bytesRead = read (descriptor, buf, fragmentSize);
-    printf("------------%d\n", bytesRead);
-    //if (bytesRead!= fragmentSize)
-        //printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    //printf ("*");fflush (stdout);
+    if (bytesRead!= fragmentSize)
+        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    printf ("*");fflush (stdout);
 }
 
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
