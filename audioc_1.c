@@ -18,9 +18,9 @@ RATE sampling rate in Hz
 
 default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block 
 
-gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets.c audioc.c
+gcc -Wall -Wextra -o audioc_1 audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets.c audioc_1.c
 
-./audioc 227.3.4.5 4532 -l100
+./audioc_1 227.3.4.5 4532 -l100
 */
 
 #include <stdbool.h>
@@ -144,11 +144,9 @@ void main(int argc, char *argv[])
         rate = 44100;
         sndCardFormat = S16_LE;
     }
-    printf("%d\n", packetDuration);
     aux1 = ((float) packetDuration / MILI_PER_SEC) * (float) rate;
     aux2 = (channelNumber * sndCardFormat / BITS_PER_BYTE);
     requestedFragmentSize = (int) aux1 * aux2;
-    printf("%d\n", requestedFragmentSize);
     // printf("%d\n", (int) aux1);
     // printf("%d\n", aux2);
     // printf("%d\n", requestedFragmentSize);
@@ -198,7 +196,7 @@ void main(int argc, char *argv[])
     }
 
     /* opens file in read-only mode */
-    if ((file = open (fileName_audio, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU)) < 0) {
+    if ((file = open (fileName_audio,  O_RDONLY)) < 0) {
         printf("File could not be opened, error %s", strerror(errno));
         exit(1);
     }
@@ -236,9 +234,9 @@ void main(int argc, char *argv[])
 
 
     while(1){
-        update_buffer(descriptorSnd, requestedFragmentSize);
-        record(file, requestedFragmentSize);
-        printf("Grabando ...");
+        update_buffer(file, requestedFragmentSize);
+        record(descriptorSnd, requestedFragmentSize);
+        printf("Escuchando ...");
     }
         
 
@@ -273,6 +271,9 @@ void update_buffer(int descriptor, int fragmentSize){
     //     printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
     // printf (".");fflush (stdout);
 }
+
+
+
 
 /* This function opens an existing file 'fileName'. It reads 'fragmentSize'
  * bytes and sends them to the soundcard, for playback
