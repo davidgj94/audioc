@@ -113,7 +113,7 @@ void main(int argc, char *argv[])
     }
     
     requestedFragmentSize = ms2bytes(packetDuration, rate, channelNumber, sndCardFormat);
-    numberOfBlocks = (int) ((float) ms2bytes(bufferingTime, rate, channelNumber, sndCardFormat) / (float) requestedFragmentSize)
+    numberOfBlocks = (int) ((float) ms2bytes(bufferingTime, rate, channelNumber, sndCardFormat) / (float) requestedFragmentSize);
 
     /* create snd descritor and configure soundcard to given format, rate, number of channels. 
 
@@ -178,12 +178,9 @@ void main(int argc, char *argv[])
 };
 
 
-
-void play(int descriptor, int fragmentSize)
-{
+void play(int descriptor, int fragmentSize){
     int bytesRead;
-    bytesRead = write (file, buf, fragmentSize);
-    printf("%d\n", bytesRead);
+    bytesRead = write (descriptor, buf, fragmentSize);
     if (bytesRead!= fragmentSize)
         printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
     printf (".");fflush (stdout);
@@ -192,15 +189,14 @@ void play(int descriptor, int fragmentSize)
 void update_buffer(int descriptor, int fragmentSize){
     int bytesRead;
     bytesRead = read (descriptor, buf, fragmentSize);
-    printf("%d\n", bytesRead);
     if (bytesRead!= fragmentSize)
         printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    printf (".");fflush (stdout);
+    printf ("*");fflush (stdout);
 }
 
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     int numberOfSamples = (int) (
-        ((float) packetDuration / MILI_PER_SEC) * (float) rate);
+        ((float) duration / MILI_PER_SEC) * (float) rate);
     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
     return numberOfSamples * bytesPerSample;
 }
