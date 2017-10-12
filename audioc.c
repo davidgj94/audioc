@@ -55,7 +55,7 @@ char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember t
 /* activated by Ctrl-C */
 void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unused))   -> this indicates gcc not to show an 'unused parameter' warning about sigNum: is not used, but the function must be declared with this parameter */
 {
-    printf ("\naudioSimple was requested to finish\n");
+    printf ("\naudioc was requested to finish\n");
     if (buf) free(buf);
     if (fileName) free(fileName);
     exit (0);
@@ -144,11 +144,12 @@ void main(int argc, char *argv[])
         exit (1); /* very unusual case */ 
     }
 
-    if(sockId = easy_init(multicastIp) < 0){
-        printf("Could not initialize socket.\n");
-        exit(1);
-    }
-    
+    // if(sockId = easy_init(multicastIp) < 0){
+    //     printf("Could not initialize socket.\n");
+    //     exit(1);
+    // }
+    sockId = easy_init(multicastIp);
+    printf("%d\n", sockId);
     while(1){
 
         FD_ZERO(&reading_set);
@@ -162,11 +163,10 @@ void main(int argc, char *argv[])
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
                 update_buffer(descriptorSnd, requestedFragmentSize);
-                easy_send(buf);
+                easy_send(buf, requestedFragmentSize);
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
-                printf("entro");
                 update_buffer(sockId, requestedFragmentSize);
                 play(descriptorSnd, requestedFragmentSize);
             }
@@ -182,17 +182,19 @@ void main(int argc, char *argv[])
 void play(int descriptor, int fragmentSize){
     int bytesRead;
     bytesRead = write (descriptor, buf, fragmentSize);
-    if (bytesRead!= fragmentSize)
-        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    printf (".");fflush (stdout);
+    printf("**********%d\n", bytesRead);
+    //if (bytesRead!= fragmentSize)
+        //printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    //printf (".");fflush (stdout);
 }
 
 void update_buffer(int descriptor, int fragmentSize){
     int bytesRead;
     bytesRead = read (descriptor, buf, fragmentSize);
-    if (bytesRead!= fragmentSize)
-        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    printf ("*");fflush (stdout);
+    printf("------------%d\n", bytesRead);
+    //if (bytesRead!= fragmentSize)
+        //printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    //printf ("*");fflush (stdout);
 }
 
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){

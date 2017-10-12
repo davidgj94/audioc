@@ -101,11 +101,11 @@ int easy_init(struct in_addr multicastIp){
 
 }
 
-int easy_send(char * message){
+int easy_send(char * message, int fragmentSize){
     /* Using sendto to send information. Since I've made a bind to the socket, the localSAddr (source) port of the packet is fixed. 
        In the remoteSAddr structure I have the address and port of the remote host, as returned by recvfrom */ 
     /* Using sendto to send information. Since I've bind the socket, the local (source) port of the packet is fixed. In the rem structure I set the remote (destination) address and port */ 
-    if ( (result = sendto(sockId, message, sizeof(message), /* flags */ 0, (struct sockaddr *) &remToSendSAddr, sizeof(remToSendSAddr)))<0) {
+    if ( (result = sendto(sockId, message, fragmentSize, /* flags */ 0, (struct sockaddr *) &remToSendSAddr, sizeof(remToSendSAddr)))<0) {
         printf("sendto error\n");
     } else {
         //printf("Message sent to group\n"); 
