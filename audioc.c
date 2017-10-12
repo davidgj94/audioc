@@ -223,7 +223,7 @@ void main(int argc, char *argv[])
 
             if(FD_ISSET (sockId, &conjunto_lectura) == 1){
                 update_buffer(sockId, requestedFragmentSize);
-                record(file, requestedFragmentSize);
+                record(descriptorSnd, requestedFragmentSize);
                 printf("nuevo audio socket");
 
             }
