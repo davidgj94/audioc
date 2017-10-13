@@ -52,12 +52,14 @@ const float MILI_PER_SEC = 1000.0;
 /* only declare here variables which are used inside the signal handler */
 char *buf = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
+void *circular_buf = NULL;
 /* activated by Ctrl-C */
 void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unused))   -> this indicates gcc not to show an 'unused parameter' warning about sigNum: is not used, but the function must be declared with this parameter */
 {
     printf ("\naudioc was requested to finish\n");
     if (buf) free(buf);
     if (fileName) free(fileName);
+    if (circular_buf) cbuf_destroy_buffer (circular_buf);
     exit (0);
 }
 
@@ -78,7 +80,7 @@ void main(int argc, char *argv[])
     int payload;       
     int bufferingTime;  
     int numberOfBlocks;
-    fd_set reading_set;
+    fd_set reading_set, writing_set;
     int sockId;
     struct in_addr multicastIp;
     int res;
@@ -130,13 +132,8 @@ void main(int argc, char *argv[])
     create circular buffer
      ***************************************/
 
-    //void * buffer = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
+    circular_buf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
 
-    /****************************************
-    create circular buffer
-     ***************************************/
-    //send(descriptorSnd, requestedFragmentSize);
-    //record (descriptorSnd,"asdf.txt", requestedFragmentSize);
 
     buf = malloc (requestedFragmentSize); 
     if (buf == NULL) { 
@@ -144,22 +141,29 @@ void main(int argc, char *argv[])
         exit (1); /* very unusual case */ 
     }
 
-    // if(sockId = easy_init(multicastIp) < 0){
-    //     printf("Could not initialize socket.\n");
-    //     exit(1);
-    // }
-    sockId = easy_init(multicastIp);
-    printf("%d\n", sockId);
+    if((sockId = easy_init(multicastIp)) < 0){
+        printf("Could not initialize socket.\n");
+        exit(1);
+    }
+    
     while(1){
 
         FD_ZERO(&reading_set);
         FD_SET(descriptorSnd, &reading_set);
         FD_SET(sockId, &reading_set);
 
+        FD_ZERO(&writing_set);
+        FD_SET(descriptorSnd, &writing_set);
+
         if ((res = select (FD_SETSIZE, &reading_set, NULL, NULL, NULL)) < 0) {
             printf("Select failed");
             exit(1);
         }else{
+
+            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block (circular_buf)){
+                buf = (char *) cbuf_pointer_to_read (void *buffer);
+                play(descriptorSnd, requestedFragmentSize);
+            }
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
                 update_buffer(descriptorSnd, requestedFragmentSize);
