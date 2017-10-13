@@ -8,6 +8,6 @@
 
 int easy_init(struct in_addr multicastIp);
 
-int easy_send(char * message, int fragmentSize);
+int easy_send(void * message, int size);
 
 int easy_receive(char * buff);

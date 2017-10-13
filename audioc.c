@@ -45,12 +45,13 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 void update_buffer(int descriptor, int fragmentSize);
 void play(int descriptor, int fragmentSize);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
+void create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
 
 /* only declare here variables which are used inside the signal handler */
-char *buf = NULL;
+void *buf = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
 void *circular_buf = NULL;
 /* activated by Ctrl-C */
@@ -84,6 +85,7 @@ void main(int argc, char *argv[])
     int sockId;
     struct in_addr multicastIp;
     int res;
+    int 
 
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
@@ -132,8 +134,11 @@ void main(int argc, char *argv[])
     create circular buffer
      ***************************************/
 
-    circular_buf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
+    // circular_buf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
 
+    /****************************************
+    create no delay buffer
+     ***************************************/
 
     buf = malloc (requestedFragmentSize); 
     if (buf == NULL) { 
@@ -145,7 +150,9 @@ void main(int argc, char *argv[])
         printf("Could not initialize socket.\n");
         exit(1);
     }
-    
+
+    circular_buf = reate_fill_cbuf(int numberOfBlocks, int requestedFragmentSize, int sockId);
+
     while(1){
 
         FD_ZERO(&reading_set);
@@ -161,18 +168,19 @@ void main(int argc, char *argv[])
         }else{
 
             if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block (circular_buf)){
-                buf = (char *) cbuf_pointer_to_read (void *buffer);
+                circular_buf = cbuf_pointer_to_read (circular_buf);
                 play(descriptorSnd, requestedFragmentSize);
             }
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
-                update_buffer(descriptorSnd, requestedFragmentSize);
+                update_buffer(descriptorSnd, buf, requestedFragmentSize);
                 easy_send(buf, requestedFragmentSize);
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
-                update_buffer(sockId, requestedFragmentSize);
-                play(descriptorSnd, requestedFragmentSize);
+                circular_buf = cbuf_pointer_to_write (circular_buf);
+                update_buffer(sockId, buf, requestedFragmentSize);
+                memcpy(circular_buf, buf, requestedFragmentSize);
             }
 
         }
@@ -185,15 +193,15 @@ void main(int argc, char *argv[])
 
 void play(int descriptor, int fragmentSize){
     int bytesRead;
-    bytesRead = write (descriptor, buf, fragmentSize);
+    bytesRead = write (descriptor, circular_buf, fragmentSize);
     if (bytesRead!= fragmentSize)
         printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
     printf (".");fflush (stdout);
 }
 
-void update_buffer(int descriptor, int fragmentSize){
+void update_buffer(int descriptor, void *buffer, int size){
     int bytesRead;
-    bytesRead = read (descriptor, buf, fragmentSize);
+    bytesRead = read (descriptor, buffer, size);
     if (bytesRead!= fragmentSize)
         printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
     printf ("*");fflush (stdout);
@@ -204,5 +212,20 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
         ((float) duration / MILI_PER_SEC) * (float) rate);
     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
     return numberOfSamples * bytesPerSample;
+}
+
+void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
+    int i;
+    void *cbuf = NULL;
+
+    cbuf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
+
+    for(i = 0; i < numberOfBlocks; i++){
+        cbuf = cbuf_pointer_to_write (circular_buf);
+        update_buffer(descriptor, cbuf, BlockSize);
+    }
+
+    return cbuf;
+
 }
 
