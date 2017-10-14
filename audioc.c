@@ -151,7 +151,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = reate_fill_cbuf(int numberOfBlocks, int requestedFragmentSize, int sockId);
+    circular_buf = create_fill_cbuf(numberOfBlocks, requestedFragmentSize, sockId);
 
     while(1){
 
@@ -162,7 +162,7 @@ void main(int argc, char *argv[])
         FD_ZERO(&writing_set);
         FD_SET(descriptorSnd, &writing_set);
 
-        if ((res = select (FD_SETSIZE, &reading_set, NULL, NULL, NULL)) < 0) {
+        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
             printf("Select failed");
             exit(1);
         }else{
@@ -215,14 +215,17 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
 }
 
 void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
+    printf("Number of blocks is : %d\n", numberOfBlocks);
+    printf("Block size is : %d\n", BlockSize);
     int i;
     void *cbuf = NULL;
 
     cbuf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
-
+    printf("Esperando para llenar el buffer circular ...\n")
     for(i = 0; i < numberOfBlocks; i++){
         cbuf = cbuf_pointer_to_write (circular_buf);
         update_buffer(descriptor, cbuf, BlockSize);
+        printf("Llenando buffer ...\n");
     }
 
     return cbuf;
