@@ -42,10 +42,10 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include "configureSndcard.h"
 #include "easyUDPSockets.h"
 
-void update_buffer(int descriptor, int fragmentSize);
+void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, int fragmentSize);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
-void create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
+void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
@@ -85,7 +85,6 @@ void main(int argc, char *argv[])
     int sockId;
     struct in_addr multicastIp;
     int res;
-    int 
 
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
@@ -202,8 +201,8 @@ void play(int descriptor, int fragmentSize){
 void update_buffer(int descriptor, void *buffer, int size){
     int bytesRead;
     bytesRead = read (descriptor, buffer, size);
-    if (bytesRead!= fragmentSize)
-        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
+    if (bytesRead!= size)
+        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, size);
     printf ("*");fflush (stdout);
 }
 
@@ -217,13 +216,14 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
 void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
     printf("Number of blocks is : %d\n", numberOfBlocks);
     printf("Block size is : %d\n", BlockSize);
+
     int i;
     void *cbuf = NULL;
 
-    cbuf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
-    printf("Esperando para llenar el buffer circular ...\n")
+    cbuf = cbuf_create_buffer (numberOfBlocks, BlockSize);
+    printf("Esperando para llenar el buffer circular ...\n");
     for(i = 0; i < numberOfBlocks; i++){
-        cbuf = cbuf_pointer_to_write (circular_buf);
+        cbuf = cbuf_pointer_to_write (cbuf);
         update_buffer(descriptor, cbuf, BlockSize);
         printf("Llenando buffer ...\n");
     }
