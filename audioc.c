@@ -45,7 +45,7 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, int fragmentSize);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
-void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
+// void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
@@ -85,6 +85,8 @@ void main(int argc, char *argv[])
     int sockId;
     struct in_addr multicastIp;
     int res;
+    int buffering = 1;
+    int i = 0;
 
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
@@ -150,7 +152,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = create_fill_cbuf(numberOfBlocks, requestedFragmentSize, sockId);
+    circular_buf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
 
     while(1){
 
@@ -166,7 +168,7 @@ void main(int argc, char *argv[])
             exit(1);
         }else{
 
-            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block (circular_buf)){
+            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block (circular_buf) && !buffering){
                 circular_buf = cbuf_pointer_to_read (circular_buf);
                 play(descriptorSnd, requestedFragmentSize);
             }
@@ -180,6 +182,12 @@ void main(int argc, char *argv[])
                 circular_buf = cbuf_pointer_to_write (circular_buf);
                 update_buffer(sockId, buf, requestedFragmentSize);
                 memcpy(circular_buf, buf, requestedFragmentSize);
+
+                if (buffering){
+                    printf("Buffering ...\n");
+                    i ++;
+                    buffering = (i == numberOfBlocks);
+                }
             }
 
         }
@@ -213,22 +221,23 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     return numberOfSamples * bytesPerSample;
 }
 
-void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
-    printf("Number of blocks is : %d\n", numberOfBlocks);
-    printf("Block size is : %d\n", BlockSize);
+// void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
+//     printf("Number of blocks is : %d\n", numberOfBlocks);
+//     printf("Block size is : %d\n", BlockSize);
+//     printf("%d\n",descriptor);
 
-    int i;
-    void *cbuf = NULL;
+//     int i;
+//     void *cbuf = NULL;
 
-    cbuf = cbuf_create_buffer (numberOfBlocks, BlockSize);
-    printf("Esperando para llenar el buffer circular ...\n");
-    for(i = 0; i < numberOfBlocks; i++){
-        cbuf = cbuf_pointer_to_write (cbuf);
-        update_buffer(descriptor, cbuf, BlockSize);
-        printf("Llenando buffer ...\n");
-    }
+//     cbuf = cbuf_create_buffer (numberOfBlocks, BlockSize);
+//     printf("Esperando para llenar el buffer circular ...\n");
+//     for(i = 0; i < numberOfBlocks; i++){
+//         cbuf = cbuf_pointer_to_write (cbuf);
+//         update_buffer(descriptor, cbuf, BlockSize);
+//         printf("Llenando buffer ...\n");
+//     }
 
-    return cbuf;
+//     return cbuf;
 
-}
+// }
 
