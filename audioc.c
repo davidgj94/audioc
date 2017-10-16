@@ -152,7 +152,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
+    circular_buf = cbuf_create_buffer(numberOfBlocks, requestedFragmentSize);
 
     while(1){
 
@@ -168,7 +168,7 @@ void main(int argc, char *argv[])
             exit(1);
         }else{
 
-            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block (circular_buf) && !buffering){
+            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf) && !buffering){
                 circular_buf = cbuf_pointer_to_read (circular_buf);
                 play(descriptorSnd, requestedFragmentSize);
             }
@@ -183,10 +183,10 @@ void main(int argc, char *argv[])
                 update_buffer(sockId, buf, requestedFragmentSize);
                 memcpy(circular_buf, buf, requestedFragmentSize);
 
-                if (buffering){
+                if ((buffering = i < numberOfBlocks)){
+                    i++;
                     printf("Buffering ...\n");
-                    i ++;
-                    buffering = (i == numberOfBlocks);
+                    
                 }
             }
 
