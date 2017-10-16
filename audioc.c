@@ -183,8 +183,8 @@ void main(int argc, char *argv[])
                 update_buffer(sockId, buf, requestedFragmentSize);
                 memcpy(circular_buf, buf, requestedFragmentSize);
 
-                if ((buffering = i < numberOfBlocks)){
-                    i++;
+                if (buffering){
+                    buffering = (++i < numberOfBlocks);
                     printf("Buffering ...\n");
                     
                 }
