@@ -43,7 +43,7 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include "easyUDPSockets.h"
 
 void update_buffer(int descriptor, void *buffer, int size);
-void play(int descriptor, void *buffer, int fragmentSize);
+void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
