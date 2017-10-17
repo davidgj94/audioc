@@ -152,7 +152,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = cbuf_create_buffer(numberOfBlocks, requestedFragmentSize);
+    circular_buf = cbuf_create_buffer(3*numberOfBlocks, requestedFragmentSize);
 
     while(1){
 
