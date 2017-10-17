@@ -43,7 +43,7 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include "easyUDPSockets.h"
 
 void update_buffer(int descriptor, void *buffer, int size);
-void play(int descriptor, int fragmentSize);
+void play(int descriptor, void *buffer, int fragmentSize);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
@@ -152,7 +152,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = cbuf_create_buffer(3*numberOfBlocks, requestedFragmentSize);
+    circular_buf = cbuf_create_buffer(3 * numberOfBlocks, requestedFragmentSize);
 
     while(1){
 
@@ -169,19 +169,20 @@ void main(int argc, char *argv[])
         }else{
 
             if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf) && !buffering){
-                circular_buf = cbuf_pointer_to_read (circular_buf);
-                play(descriptorSnd, requestedFragmentSize);
+                printf("Playing ...\n");
+                play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize);
             }
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
+                printf("Sending ...\n");
                 update_buffer(descriptorSnd, buf, requestedFragmentSize);
                 easy_send(buf, requestedFragmentSize);
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
-                circular_buf = cbuf_pointer_to_write (circular_buf);
+                printf("Writing in Circular buffer ...\n");
                 update_buffer(sockId, buf, requestedFragmentSize);
-                memcpy(circular_buf, buf, requestedFragmentSize);
+                memcpy(cbuf_pointer_to_write (circular_buf), buf, requestedFragmentSize);
 
                 if (buffering){
                     buffering = (++i < numberOfBlocks);
@@ -198,20 +199,20 @@ void main(int argc, char *argv[])
 };
 
 
-void play(int descriptor, int fragmentSize){
-    int bytesRead;
-    bytesRead = write (descriptor, circular_buf, fragmentSize);
-    if (bytesRead!= fragmentSize)
-        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, fragmentSize);
-    printf (".");fflush (stdout);
+void play(int descriptor, void *buffer, int size){
+    int n_bytes;
+    n_bytes = write (descriptor, buffer, size);
+    if (n_bytes!= size)
+        printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
+    // printf (".");fflush (stdout);
 }
 
 void update_buffer(int descriptor, void *buffer, int size){
-    int bytesRead;
-    bytesRead = read (descriptor, buffer, size);
-    if (bytesRead!= size)
-        printf ("Recorded a different number of bytes than expected (recorded %d bytes, expected %d)\n", bytesRead, size);
-    printf ("*");fflush (stdout);
+    int n_bytes;
+    n_bytes = read (descriptor, buffer, size);
+    if (n_bytes!= size)
+        printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
+    // printf ("*");fflush (stdout);
 }
 
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
