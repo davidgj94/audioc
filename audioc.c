@@ -16,7 +16,7 @@ Operations:
 VOL volume [0..100]
 RATE sampling rate in Hz
 
-default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block 
+default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block
 
 gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets.c audioc.c
 
@@ -73,13 +73,13 @@ void main(int argc, char *argv[])
     int rate;
     int descriptorSnd;
     int requestedFragmentSize;
-    unsigned int ssrc;          
-    int port;         
-    int vol;          
+    unsigned int ssrc;
+    int port;
+    int vol;
     int packetDuration;
-    int verbose;       
-    int payload;       
-    int bufferingTime;  
+    int verbose;
+    int payload;
+    int bufferingTime;
     int numberOfBlocks;
     fd_set reading_set, writing_set;
     int sockId;
@@ -90,18 +90,18 @@ void main(int argc, char *argv[])
 
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
-    sigInfo.sa_flags = 0; 
+    sigInfo.sa_flags = 0;
     sigemptyset(&sigInfo.sa_mask); /* clear sa_mask values */
     if ((sigaction (SIGINT, &sigInfo, NULL)) < 0) {
-        printf("Error installing signal, error: %s", strerror(errno)); 
+        printf("Error installing signal, error: %s", strerror(errno));
         exit(1);
     }
 
 
     /* obtain values from the command line - or default values otherwise */
-    if (-1 == args_capture_audioc(argc, argv, &multicastIp, &ssrc, 
+    if (-1 == args_capture_audioc(argc, argv, &multicastIp, &ssrc,
             &port, &vol, &packetDuration, &verbose, &payload, &bufferingTime))
-    { exit(1);  /* there was an error parsing the arguments, the error type 
+    { exit(1);  /* there was an error parsing the arguments, the error type
                    is printed by the args_capture function */
     };
 
@@ -116,14 +116,14 @@ void main(int argc, char *argv[])
         rate = 44100;
         sndCardFormat = S16_LE;
     }
-    
+
     requestedFragmentSize = ms2bytes(packetDuration, rate, channelNumber, sndCardFormat);
     numberOfBlocks = (int) ((float) ms2bytes(bufferingTime, rate, channelNumber, sndCardFormat) / (float) requestedFragmentSize);
 
-    /* create snd descritor and configure soundcard to given format, rate, number of channels. 
+    /* create snd descritor and configure soundcard to given format, rate, number of channels.
 
      * Also configures fragment size */
-    configSndcard (&descriptorSnd, &sndCardFormat, &channelNumber, &rate, &requestedFragmentSize); 
+    configSndcard (&descriptorSnd, &sndCardFormat, &channelNumber, &rate, &requestedFragmentSize);
     vol = configVol (channelNumber, descriptorSnd, vol);
 
     args_print_audioc(multicastIp, ssrc, port, packetDuration, payload, bufferingTime, vol, verbose);
@@ -141,10 +141,10 @@ void main(int argc, char *argv[])
     create no delay buffer
      ***************************************/
 
-    buf = malloc (requestedFragmentSize); 
-    if (buf == NULL) { 
-        printf("Could not reserve memory for audio data.\n"); 
-        exit (1); /* very unusual case */ 
+    buf = malloc (requestedFragmentSize);
+    if (buf == NULL) {
+        printf("Could not reserve memory for audio data.\n");
+        exit (1); /* very unusual case */
     }
 
     if((sockId = easy_init(multicastIp)) < 0){
@@ -152,7 +152,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = cbuf_create_buffer(3 * numberOfBlocks, requestedFragmentSize);
+    circular_buf = cbuf_create_buffer(numberOfBlocks + ms2bytes(200, rate, channelNumber, sndCardFormat), requestedFragmentSize);
 
     while(1){
 
@@ -166,6 +166,7 @@ void main(int argc, char *argv[])
         if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
             printf("Select failed");
             exit(1);
+
         }else{
 
             if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf) && !buffering){
@@ -187,7 +188,7 @@ void main(int argc, char *argv[])
                 if (buffering){
                     buffering = (++i < numberOfBlocks);
                     printf("Buffering ...\n");
-                    
+
                 }
             }
 
@@ -241,4 +242,3 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
 //     return cbuf;
 
 // }
-
