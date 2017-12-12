@@ -16,7 +16,7 @@ Operations:
 VOL volume [0..100]
 RATE sampling rate in Hz
 
-default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block 
+default values:  8 bits, vol 90, sampling rate 8000, 1 channel, 4096 bytes per block
 
 gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c easyUDPSockets.c audioc.c
 
@@ -36,15 +36,19 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <stdint.h>
 
 #include "audiocArgs.h"
 #include "circularBuffer.h"
 #include "configureSndcard.h"
 #include "easyUDPSockets.h"
+#include "rtp.h"
 
 void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
+
+
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
 const int BITS_PER_BYTE = 8;
@@ -52,8 +56,13 @@ const float MILI_PER_SEC = 1000.0;
 
 /* only declare here variables which are used inside the signal handler */
 void *buf = NULL;
+void *bufheader = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
 void *circular_buf = NULL;
+
+
+
+
 /* activated by Ctrl-C */
 void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unused))   -> this indicates gcc not to show an 'unused parameter' warning about sigNum: is not used, but the function must be declared with this parameter */
 {
@@ -73,13 +82,13 @@ void main(int argc, char *argv[])
     int rate;
     int descriptorSnd;
     int requestedFragmentSize;
-    unsigned int ssrc;          
-    int port;         
-    int vol;          
+    unsigned int ssrc;
+    int port;
+    int vol;
     int packetDuration;
-    int verbose;       
-    int payload;       
-    int bufferingTime;  
+    int verbose;
+    int payload;
+    int bufferingTime;
     int numberOfBlocks;
     fd_set reading_set, writing_set;
     int sockId;
@@ -87,21 +96,26 @@ void main(int argc, char *argv[])
     int res;
     int buffering = 1;
     int i = 0;
+    unsigned int nseq = 0;
+    unsigned int timeStamp = 0;
+    unsigned int timeStamp_anterior = 0;
+    unsigned int seqNum_anterior = 0;
+
 
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
-    sigInfo.sa_flags = 0; 
+    sigInfo.sa_flags = 0;
     sigemptyset(&sigInfo.sa_mask); /* clear sa_mask values */
     if ((sigaction (SIGINT, &sigInfo, NULL)) < 0) {
-        printf("Error installing signal, error: %s", strerror(errno)); 
+        printf("Error installing signal, error: %s", strerror(errno));
         exit(1);
     }
 
 
     /* obtain values from the command line - or default values otherwise */
-    if (-1 == args_capture_audioc(argc, argv, &multicastIp, &ssrc, 
+    if (-1 == args_capture_audioc(argc, argv, &multicastIp, &ssrc,
             &port, &vol, &packetDuration, &verbose, &payload, &bufferingTime))
-    { exit(1);  /* there was an error parsing the arguments, the error type 
+    { exit(1);  /* there was an error parsing the arguments, the error type
                    is printed by the args_capture function */
     };
 
@@ -116,14 +130,14 @@ void main(int argc, char *argv[])
         rate = 44100;
         sndCardFormat = S16_LE;
     }
-    
+
     requestedFragmentSize = ms2bytes(packetDuration, rate, channelNumber, sndCardFormat);
     numberOfBlocks = (int) ((float) ms2bytes(bufferingTime, rate, channelNumber, sndCardFormat) / (float) requestedFragmentSize);
 
-    /* create snd descritor and configure soundcard to given format, rate, number of channels. 
+    /* create snd descritor and configure soundcard to given format, rate, number of channels.
 
      * Also configures fragment size */
-    configSndcard (&descriptorSnd, &sndCardFormat, &channelNumber, &rate, &requestedFragmentSize); 
+    configSndcard (&descriptorSnd, &sndCardFormat, &channelNumber, &rate, &requestedFragmentSize);
     vol = configVol (channelNumber, descriptorSnd, vol);
 
     args_print_audioc(multicastIp, ssrc, port, packetDuration, payload, bufferingTime, vol, verbose);
@@ -131,28 +145,23 @@ void main(int argc, char *argv[])
     printf ("Duration of each packet exchanged with the soundcard :%f\n", (float) requestedFragmentSize / (float) (channelNumber * sndCardFormat / BITS_PER_BYTE) * rate);
 
 
-    /****************************************
-    create circular buffer
-     ***************************************/
+    /****************************************/
 
-    // circular_buf = cbuf_create_buffer (numberOfBlocks, requestedFragmentSize);
 
-    /****************************************
-    create no delay buffer
-     ***************************************/
-
-    buf = malloc (requestedFragmentSize); 
-    if (buf == NULL) { 
-        printf("Could not reserve memory for audio data.\n"); 
-        exit (1); /* very unusual case */ 
+    buf = malloc (requestedFragmentSize + 12);
+    if (buf == NULL) {
+        printf("Could not reserve memory for audio data.\n");
+        exit (1); /* very unusual case */
     }
+	buf = buf + 12;
+
 
     if((sockId = easy_init(multicastIp)) < 0){
         printf("Could not initialize socket.\n");
         exit(1);
     }
 
-    circular_buf = cbuf_create_buffer(3 * numberOfBlocks, requestedFragmentSize);
+    circular_buf = cbuf_create_buffer(numberOfBlocks + ms2bytes(200, rate, channelNumber, sndCardFormat), requestedFragmentSize);
 
     while(1){
 
@@ -166,6 +175,7 @@ void main(int argc, char *argv[])
         if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
             printf("Select failed");
             exit(1);
+
         }else{
 
             if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf) && !buffering){
@@ -175,21 +185,51 @@ void main(int argc, char *argv[])
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
                 printf("Sending ...\n");
+	
+
                 update_buffer(descriptorSnd, buf, requestedFragmentSize);
-                easy_send(buf, requestedFragmentSize);
+                rtp_hdr_t * hdr_message;
+				hdr_message = (rtp_hdr_t *) (buf - 12);
+
+				
+
+				(*hdr_message).seq = htons(nseq);
+				(*hdr_message).ts = htons(timeStamp);
+				(*hdr_message).ssrc = htons(ssrc);
+				nseq = nseq + 1;
+				timeStamp = timeStamp + requestedFragmentSize;
+                       
+                easy_send(buf, requestedFragmentSize + 12);
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
                 printf("Writing in Circular buffer ...\n");
-                update_buffer(sockId, buf, requestedFragmentSize);
+
+                update_buffer(sockId, buf, requestedFragmentSize + 12);
+                   rtp_hdr_t * hdr_message;
+
+                hdr_message = (rtp_hdr_t*) buf;
+
+                unsigned int timeStamp_actual = ntohs((*hdr_message).ts);
+		unsigned int seqNum_actual = ntohs((*hdr_message).seq);
+
+				if(seqNum_actual == seqNum_anterior + 1 && timeStamp_actual == timeStamp_anterior + requestedFragmentSize){
+				   	seqNum_anterior = seqNum_actual;
+				    timeStamp_anterior = timeStamp_actual;
+				}
+
+				buf = buf + 12;
+
                 memcpy(cbuf_pointer_to_write (circular_buf), buf, requestedFragmentSize);
+
+            }
 
                 if (buffering){
                     buffering = (++i < numberOfBlocks);
                     printf("Buffering ...\n");
-                    
+
                 }
-            }
+            
 
         }
 
@@ -213,6 +253,7 @@ void update_buffer(int descriptor, void *buffer, int size){
     if (n_bytes!= size)
         printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
     // printf ("*");fflush (stdout);
+
 }
 
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
@@ -221,6 +262,19 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
     return numberOfSamples * bytesPerSample;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
 //     printf("Number of blocks is : %d\n", numberOfBlocks);
@@ -241,4 +295,3 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
 //     return cbuf;
 
 // }
-
