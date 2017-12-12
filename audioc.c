@@ -55,7 +55,8 @@ const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
 
 /* only declare here variables which are used inside the signal handler */
-void *buf = NULL;
+void *buf_rcv = NULL;
+void *buf_send = NULL;
 void *bufheader = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
 void *circular_buf = NULL;
@@ -67,7 +68,8 @@ void *circular_buf = NULL;
 void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unused))   -> this indicates gcc not to show an 'unused parameter' warning about sigNum: is not used, but the function must be declared with this parameter */
 {
     printf ("\naudioc was requested to finish\n");
-    if (buf) free(buf);
+    if (buf_rcv) free(buf_rcv);
+    if (buf_send) free(buf_send);
     if (fileName) free(fileName);
     if (circular_buf) cbuf_destroy_buffer (circular_buf);
     exit (0);
@@ -99,7 +101,10 @@ void main(int argc, char *argv[])
     unsigned int nseq = 0;
     unsigned int timeStamp = 0;
     unsigned int timeStamp_anterior = 0;
+    unsigned int timeStamp_actual = 0;
     unsigned int seqNum_anterior = 0;
+    unsigned int seqNum_actual = 0;
+    rtp_hdr_t * hdr_message;
 
 
     /* we configure the signal */
@@ -148,12 +153,17 @@ void main(int argc, char *argv[])
     /****************************************/
 
 
-    buf = malloc (requestedFragmentSize + 12);
-    if (buf == NULL) {
-        printf("Could not reserve memory for audio data.\n");
+    buf_rcv = malloc (requestedFragmentSize + sizeof(rtp_hdr_t));
+    if (buf_rcv == NULL) {
+        printf("Could not reserve memory for buf_rcv.\n");
         exit (1); /* very unusual case */
     }
-	buf = buf + 12;
+
+    buf_send = malloc (requestedFragmentSize + sizeof(rtp_hdr_t));
+    if (buf_send == NULL) {
+        printf("Could not reserve memory for buf_send.\n");
+        exit (1); /* very unusual case */
+    }
 
 
     if((sockId = easy_init(multicastIp)) < 0){
@@ -185,50 +195,47 @@ void main(int argc, char *argv[])
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
                 printf("Sending ...\n");
+
+                hdr_message = (rtp_hdr_t *) buf_send;
+                (*hdr_message).version = 2;
+                (*hdr_message).ssrc = htons(ssrc);
+                (*hdr_message).nseq = htons(nseq);
+                (*hdr_message).timeStamp = htons(timeStamp);
 	
+                update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
 
-                update_buffer(descriptorSnd, buf, requestedFragmentSize);
-                rtp_hdr_t * hdr_message;
-				hdr_message = (rtp_hdr_t *) (buf - 12);
+                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
 
-				
-
-				(*hdr_message).seq = htons(nseq);
-				(*hdr_message).ts = htons(timeStamp);
-				(*hdr_message).ssrc = htons(ssrc);
 				nseq = nseq + 1;
 				timeStamp = timeStamp + requestedFragmentSize;
                        
-                easy_send(buf, requestedFragmentSize + 12);
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
                 printf("Writing in Circular buffer ...\n");
 
-                update_buffer(sockId, buf, requestedFragmentSize + 12);
-                   rtp_hdr_t * hdr_message;
+                update_buffer(sockId, buf_rcv, requestedFragmentSize + sizeof(rtp_hdr_t));
 
-                hdr_message = (rtp_hdr_t*) buf;
+                hdr_message = (rtp_hdr_t *) buf_rcv;
+                timeStamp_actual = ntohs((*hdr_message).ts);
+		        seqNum_actual = ntohs((*hdr_message).seq);
 
-                unsigned int timeStamp_actual = ntohs((*hdr_message).ts);
-		unsigned int seqNum_actual = ntohs((*hdr_message).seq);
-
-				if(seqNum_actual == seqNum_anterior + 1 && timeStamp_actual == timeStamp_anterior + requestedFragmentSize){
-				   	seqNum_anterior = seqNum_actual;
-				    timeStamp_anterior = timeStamp_actual;
-				}
-
-				buf = buf + 12;
-
-                memcpy(cbuf_pointer_to_write (circular_buf), buf, requestedFragmentSize);
-
-            }
+                if(i==0){
+                    seqNum_anterior = seqNum_actual;
+                    timeStamp_anterior = timeStamp_actual;
+                    memcpy(cbuf_pointer_to_write (circular_buf), buf + sizeof(rtp_hdr_t), requestedFragmentSize);
+                }else if((seqNum_actual == seqNum_anterior + 1) && (timeStamp_actual == timeStamp_anterior + requestedFragmentSize)){
+                    seqNum_anterior = seqNum_actual;
+                    timeStamp_anterior = timeStamp_actual;
+                    memcpy(cbuf_pointer_to_write (circular_buf), buf + sizeof(rtp_hdr_t), requestedFragmentSize);
+                }
 
                 if (buffering){
                     buffering = (++i < numberOfBlocks);
                     printf("Buffering ...\n");
-
                 }
+
+            }
             
 
         }
