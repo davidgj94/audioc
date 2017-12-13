@@ -199,8 +199,8 @@ void main(int argc, char *argv[])
                 hdr_message = (rtp_hdr_t *) buf_send;
                 (*hdr_message).version = 2;
                 (*hdr_message).ssrc = htons(ssrc);
-                (*hdr_message).nseq = htons(nseq);
-                (*hdr_message).timeStamp = htons(timeStamp);
+                (*hdr_message).seq = htons(nseq);
+                (*hdr_message).ts = htons(timeStamp);
 	
                 update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
 
@@ -223,11 +223,11 @@ void main(int argc, char *argv[])
                 if(i==0){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-                    memcpy(cbuf_pointer_to_write (circular_buf), buf + sizeof(rtp_hdr_t), requestedFragmentSize);
+                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                 }else if((seqNum_actual == seqNum_anterior + 1) && (timeStamp_actual == timeStamp_anterior + requestedFragmentSize)){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-                    memcpy(cbuf_pointer_to_write (circular_buf), buf + sizeof(rtp_hdr_t), requestedFragmentSize);
+                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                 }
 
                 if (buffering){
