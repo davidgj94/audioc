@@ -84,7 +84,6 @@ void main(int argc, char *argv[])
     int rate;
     int descriptorSnd;
     int requestedFragmentSize;
-    unsigned int ssrc;
     int port;
     int vol;
     int packetDuration;
@@ -174,6 +173,75 @@ void main(int argc, char *argv[])
 
     circular_buf = cbuf_create_buffer(numberOfBlocks + ms2bytes(200, rate, channelNumber, sndCardFormat), requestedFragmentSize);
 
+
+    while(buffering){
+
+        FD_ZERO(&reading_set);
+        FD_SET(descriptorSnd, &reading_set);
+        FD_SET(sockId, &reading_set);
+
+        if ((res = select (FD_SETSIZE, &reading_set, NULL, NULL, NULL)) < 0) {
+            printf("Select failed");
+            exit(1);
+
+        }else{
+
+            if(FD_ISSET (descriptorSnd, &reading_set) == 1){
+                printf("Sending ...\n");
+
+                hdr_message = (rtp_hdr_t *) buf_send;
+
+                (*hdr_message).version = 2;
+                (*hdr_message).p = 0;
+                (*hdr_message).x = 0;
+                (*hdr_message).cc = 0;
+                (*hdr_message).m = 0;
+                (*hdr_message).m = 0;
+                (*hdr_message).ssrc = htonl(ssrc);
+                (*hdr_message).seq = htons(nseq);
+                (*hdr_message).ts = htonl(timeStamp);
+    
+                update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
+
+                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
+
+                nseq = nseq + 1;
+                timeStamp = timeStamp + requestedFragmentSize;
+                       
+            }
+
+            if(FD_ISSET (sockId, &reading_set) == 1){
+                printf("Writing in Circular buffer ...\n");
+
+                update_buffer(sockId, buf_rcv, requestedFragmentSize + sizeof(rtp_hdr_t));
+
+                hdr_message = (rtp_hdr_t *) buf_rcv;
+                timeStamp_actual = ntohl((*hdr_message).ts);
+                seqNum_actual = ntohs((*hdr_message).seq);
+
+                if(i==0){
+                    seqNum_anterior = seqNum_actual;
+                    timeStamp_anterior = timeStamp_actual;
+                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+                }else if((seqNum_actual == seqNum_anterior + 1) && (timeStamp_actual == timeStamp_anterior + requestedFragmentSize)){
+                    seqNum_anterior = seqNum_actual;
+                    timeStamp_anterior = timeStamp_actual;
+                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+                }
+
+                
+                buffering = (++i < numberOfBlocks);
+                printf("Buffering ...\n");
+
+            }
+            
+
+        }
+
+    }
+
+
+
     while(1){
 
         FD_ZERO(&reading_set);
@@ -189,7 +257,7 @@ void main(int argc, char *argv[])
 
         }else{
 
-            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf) && !buffering){
+            if((FD_ISSET (descriptorSnd, &writing_set) == 1)){
                 printf("Playing ...\n");
                 play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize);
             }
@@ -227,30 +295,22 @@ void main(int argc, char *argv[])
                 timeStamp_actual = ntohl((*hdr_message).ts);
 		        seqNum_actual = ntohs((*hdr_message).seq);
 
-                if(i==0){
-                    seqNum_anterior = seqNum_actual;
-                    timeStamp_anterior = timeStamp_actual;
-                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
-                }else if((seqNum_actual == seqNum_anterior + 1) && (timeStamp_actual == timeStamp_anterior + requestedFragmentSize)){
+                if((seqNum_actual == seqNum_anterior + 1) && (timeStamp_actual == timeStamp_anterior + requestedFragmentSize)){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
                     memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                 }
 
-                if (buffering){
-                    buffering = (++i < numberOfBlocks);
-                    printf("Buffering ...\n");
-                }
 
             }
-            
-
         }
 
     }
 
 
 };
+
+
 
 
 void play(int descriptor, void *buffer, int size){
