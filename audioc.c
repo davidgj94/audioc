@@ -99,11 +99,12 @@ void main(int argc, char *argv[])
     int buffering = 1;
     int i = 0;
     unsigned int nseq = 0;
-    unsigned int timeStamp = 0;
-    unsigned int timeStamp_anterior = 0;
-    unsigned int timeStamp_actual = 0;
+    unsigned long int timeStamp = 0;
+    unsigned long int timeStamp_anterior = 0;
+    unsigned long int timeStamp_actual = 0;
     unsigned int seqNum_anterior = 0;
     unsigned int seqNum_actual = 0;
+    unsigned long int ssrc = 0;
     rtp_hdr_t * hdr_message;
 
 
@@ -197,10 +198,16 @@ void main(int argc, char *argv[])
                 printf("Sending ...\n");
 
                 hdr_message = (rtp_hdr_t *) buf_send;
+
                 (*hdr_message).version = 2;
-                (*hdr_message).ssrc = htons(ssrc);
+                (*hdr_message).p = 0;
+                (*hdr_message).x = 0;
+                (*hdr_message).cc = 0;
+                (*hdr_message).m = 0;
+                (*hdr_message).m = 0;
+                (*hdr_message).ssrc = htonl(ssrc);
                 (*hdr_message).seq = htons(nseq);
-                (*hdr_message).ts = htons(timeStamp);
+                (*hdr_message).ts = htonl(timeStamp);
 	
                 update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
 
@@ -217,7 +224,7 @@ void main(int argc, char *argv[])
                 update_buffer(sockId, buf_rcv, requestedFragmentSize + sizeof(rtp_hdr_t));
 
                 hdr_message = (rtp_hdr_t *) buf_rcv;
-                timeStamp_actual = ntohs((*hdr_message).ts);
+                timeStamp_actual = ntohl((*hdr_message).ts);
 		        seqNum_actual = ntohs((*hdr_message).seq);
 
                 if(i==0){
