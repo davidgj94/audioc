@@ -47,12 +47,16 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
+void detect_silence(void* buf, int fragmentSize, int sndCardFormat);
 
 
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
+const uint8_t ZERO_U8 = 128;
+const uint8_t MA_U8 = 4;
+const float PMA = 0.6;
 
 /* only declare here variables which are used inside the signal handler */
 void *buf_rcv = NULL;
@@ -203,6 +207,8 @@ void main(int argc, char *argv[])
     
                 update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
 
+                detect_silence(buf_send + sizeof(rtp_hdr_t), requestedFragmentSize, sndCardFormat);
+
                 easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
 
                 nseq = nseq + 1;
@@ -257,7 +263,7 @@ void main(int argc, char *argv[])
 
         }else{
 
-            if((FD_ISSET (descriptorSnd, &writing_set) == 1)){
+            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf)){
                 printf("Playing ...\n");
                 play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize);
             }
@@ -338,34 +344,37 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
 }
 
 
+void detect_silence(void *buf, int fragmentSize, int sndCardFormat){
+
+    int i;
+    uint8_t* u8_pointer = (uint8_t*)buf;
+    int16_t* s16_pointer = (int16_t*)buf;
+    int silence_frames = 0;
+    int num_frames = 0;
+    float percentage_silence;
+    int size;
 
 
+    if(sndCardFormat == U8){
 
+        size = sizeof(uint8_t);
+        for(i=0; i<fragmentSize; i= i + size){
+            if((*u8_pointer < ZERO_U8 - MA_U8) && (*u8_pointer < ZERO_U8 + MA_U8)){
+                silence_frames = silence_frames + 1;
+            }
+            num_frames = num_frames + 1;
+            u8_pointer = u8_pointer + 1;
+        }
 
+    }else if(sndCardFormat == S16_LE){
+        // Falta con 16 bits
+    }
 
+    percentage_silence = (float)silence_frames / (float)num_frames;
+    if(silence_frames < PMA){
+        printf("_");
+        printf("%f\n", percentage_silence);
+    } 
 
-
-
-
-
-
-
-// void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor){
-//     printf("Number of blocks is : %d\n", numberOfBlocks);
-//     printf("Block size is : %d\n", BlockSize);
-//     printf("%d\n",descriptor);
-
-//     int i;
-//     void *cbuf = NULL;
-
-//     cbuf = cbuf_create_buffer (numberOfBlocks, BlockSize);
-//     printf("Esperando para llenar el buffer circular ...\n");
-//     for(i = 0; i < numberOfBlocks; i++){
-//         cbuf = cbuf_pointer_to_write (cbuf);
-//         update_buffer(descriptor, cbuf, BlockSize);
-//         printf("Llenando buffer ...\n");
-//     }
-
-//     return cbuf;
-
-// }
+    
+}
