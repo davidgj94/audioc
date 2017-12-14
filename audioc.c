@@ -54,9 +54,10 @@ void detect_silence(void* buf, int fragmentSize, int sndCardFormat);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
+
 const uint8_t ZERO_U8 = 128;
 const uint8_t MA_U8 = 4;
-const float PMA = 0.6;
+const float PMA = 0.7;
 
 /* only declare here variables which are used inside the signal handler */
 void *buf_rcv = NULL;
@@ -359,7 +360,7 @@ void detect_silence(void *buf, int fragmentSize, int sndCardFormat){
 
         size = sizeof(uint8_t);
         for(i=0; i<fragmentSize; i= i + size){
-            if((*u8_pointer < ZERO_U8 - MA_U8) && (*u8_pointer < ZERO_U8 + MA_U8)){
+            if((*u8_pointer > (ZERO_U8 - MA_U8)) && (*u8_pointer < (ZERO_U8 + MA_U8))){
                 silence_frames = silence_frames + 1;
             }
             num_frames = num_frames + 1;
@@ -371,9 +372,8 @@ void detect_silence(void *buf, int fragmentSize, int sndCardFormat){
     }
 
     percentage_silence = (float)silence_frames / (float)num_frames;
-    if(silence_frames < PMA){
+    if(percentage_silence > PMA){
         printf("_");
-        printf("%f\n", percentage_silence);
     } 
 
     
