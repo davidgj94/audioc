@@ -48,6 +48,7 @@ void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 void detect_silence(void* buf, int fragmentSize, int sndCardFormat);
+void insert_repeated_packets(unsigned int K, int requestedFragmentSize);
 
 
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
@@ -110,6 +111,7 @@ void main(int argc, char *argv[])
     unsigned int seqNum_actual = 0;
     unsigned long int ssrc = 0;
     rtp_hdr_t * hdr_message;
+    unsigned int K = 0;
 
 
     /* we configure the signal */
@@ -208,16 +210,15 @@ void main(int argc, char *argv[])
     
                 update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
 
-                detect_silence(buf_send + sizeof(rtp_hdr_t), requestedFragmentSize, sndCardFormat);
-
                 easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-
+                    
                 nseq = nseq + 1;
                 timeStamp = timeStamp + requestedFragmentSize;
                        
             }
 
             if(FD_ISSET (sockId, &reading_set) == 1){
+                printf("--------------------------------------------------------------------\n");
                 printf("Writing in Circular buffer ...\n");
 
                 update_buffer(sockId, buf_rcv, requestedFragmentSize + sizeof(rtp_hdr_t));
@@ -226,19 +227,35 @@ void main(int argc, char *argv[])
                 timeStamp_actual = ntohl((*hdr_message).ts);
                 seqNum_actual = ntohs((*hdr_message).seq);
 
-                if(i==0){
+                printf("i: %d\n", i);
+                printf("timeStamp_actual: %lu\n", timeStamp_actual);
+                printf("seqNum_actual: %d\n", seqNum_actual);
+
+                if(i == 0){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
                     memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
-                }else if((seqNum_actual == seqNum_anterior + 1) && (timeStamp_actual == timeStamp_anterior + requestedFragmentSize)){
+                    buffering = (++i < numberOfBlocks);
+                    printf("Buffering ...\n");
+                }else if(seqNum_actual > seqNum_anterior){
+                    K = seqNum_actual - seqNum_anterior;
+                    printf("K: %d\n", K);
+                    if(K == 1){
+                        memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+                    }else if(K < 4){
+                        insert_repeated_packets(K, requestedFragmentSize);
+                    }
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+
+                    buffering = (++i < numberOfBlocks);
+                    printf("Buffering ...\n");
                 }
 
+                printf("timeStamp_anterior: %lu\n", timeStamp_anterior);
+                printf("seqNum_anterior: %d\n", seqNum_anterior);
+                printf("--------------------------------------------------------------------\n");
                 
-                buffering = (++i < numberOfBlocks);
-                printf("Buffering ...\n");
 
             }
             
@@ -246,6 +263,8 @@ void main(int argc, char *argv[])
         }
 
     }
+
+    exit (1);
 
 
 
@@ -255,8 +274,11 @@ void main(int argc, char *argv[])
         FD_SET(descriptorSnd, &reading_set);
         FD_SET(sockId, &reading_set);
 
-        FD_ZERO(&writing_set);
-        FD_SET(descriptorSnd, &writing_set);
+        if(cbuf_has_block(circular_buf)){
+            FD_ZERO(&writing_set);
+            FD_SET(descriptorSnd, &writing_set);
+        }
+        
 
         if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
             printf("Select failed");
@@ -264,7 +286,7 @@ void main(int argc, char *argv[])
 
         }else{
 
-            if((FD_ISSET (descriptorSnd, &writing_set) == 1) && cbuf_has_block(circular_buf)){
+            if(FD_ISSET (descriptorSnd, &writing_set) == 1){
                 printf("Playing ...\n");
                 play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize);
             }
@@ -342,6 +364,14 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
         ((float) duration / MILI_PER_SEC) * (float) rate);
     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
     return numberOfSamples * bytesPerSample;
+}
+
+void insert_repeated_packets(unsigned int K, int requestedFragmentSize){
+    unsigned int i;
+
+    for(i=1; i<K; i++){
+        memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+    }
 }
 
 
