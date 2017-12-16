@@ -112,6 +112,8 @@ void main(int argc, char *argv[])
     unsigned long int ssrc = 0;
     rtp_hdr_t * hdr_message;
     unsigned int K = 0;
+    int j_asdf = 0;
+    struct timeval tiempo;
 
 
 
@@ -182,7 +184,7 @@ void main(int argc, char *argv[])
         exit(1);
     }
 
-    circular_buf = cbuf_create_buffer(numberOfBlocks + ms2bytes(200, rate, channelNumber, sndCardFormat), requestedFragmentSize);
+    circular_buf = cbuf_create_buffer(numberOfBlocks, requestedFragmentSize);
 
     noise_pointer = malloc (requestedFragmentSize);
     if (buf_send == NULL) {
@@ -190,18 +192,32 @@ void main(int argc, char *argv[])
         exit (1); /* very unusual case */
     }
     create_comfort_noise(noise_pointer, requestedFragmentSize, sndCardFormat);
+    
+    // void* aux_pointer;
+    // while(buffering){
+    //     printf("%d\n", j_asdf);
+    //     aux_pointer = cbuf_pointer_to_write (circular_buf);
+    //     buffering = (aux_pointer != NULL);
+    //     if(buffering) memcpy(aux_pointer, noise_pointer, requestedFragmentSize);
+    //     j_asdf++;
+    // }
+    // exit(0);
 
-
+    tiempo.tv_sec = 10;
+    tiempo.tv_usec = 0;
     while(buffering){
 
         FD_ZERO(&reading_set);
         FD_SET(descriptorSnd, &reading_set);
         FD_SET(sockId, &reading_set);
 
-        if ((res = select (FD_SETSIZE, &reading_set, NULL, NULL, NULL)) < 0) {
+        if ((res = select (FD_SETSIZE, &reading_set, NULL, NULL, &tiempo)) < 0) {
             printf("Select failed");
             exit(1);
 
+        }else if(res == 0){
+            printf("Pasaron 10 segundos\n");
+            buffering = 0;
         }else{
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
@@ -220,11 +236,17 @@ void main(int argc, char *argv[])
                 (*hdr_message).ts = htonl(timeStamp);
     
                 update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
-
-                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
+                if(j_asdf%2){
+                    printf("Impar -> mando\n");
+                    easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
+                }else{
+                    printf("Par -> no mando\n");
+                }
+                
                     
                 nseq = nseq + 1;
                 timeStamp = timeStamp + requestedFragmentSize;
+                j_asdf++;
                        
             }
 
@@ -246,7 +268,7 @@ void main(int argc, char *argv[])
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
                     memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
-                    buffering = (++i < numberOfBlocks);
+                    i++;
                     printf("Buffering ...\n");
                 }else if(seqNum_actual > seqNum_anterior){
                     K = seqNum_actual - seqNum_anterior;
@@ -260,8 +282,7 @@ void main(int argc, char *argv[])
                     }
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-
-                    buffering = (++i < numberOfBlocks);
+                    i++;
                     printf("Buffering ...\n");
                 }
 
