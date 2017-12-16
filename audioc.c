@@ -48,7 +48,8 @@ void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 void detect_silence(void* buf, int fragmentSize, int sndCardFormat);
-void insert_repeated_packets(unsigned int K, int requestedFragmentSize);
+void insert_repeated_packets(void* buf, int requestedFragmentSize, unsigned int K);
+void create_comfort_noise(void* noise_pointer, int requestedFragmentSize, int sndCardFormat);
 
 
 // void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
@@ -66,8 +67,6 @@ void *buf_send = NULL;
 void *bufheader = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
 void *circular_buf = NULL;
-
-
 
 
 /* activated by Ctrl-C */
@@ -243,7 +242,7 @@ void main(int argc, char *argv[])
                     if(K == 1){
                         memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                     }else if(K < 4){
-                        insert_repeated_packets(K, requestedFragmentSize);
+                        insert_repeated_packets(buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize, K);
                     }
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
@@ -366,12 +365,36 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     return numberOfSamples * bytesPerSample;
 }
 
-void insert_repeated_packets(unsigned int K, int requestedFragmentSize){
+void insert_repeated_packets(void* buf, int requestedFragmentSize, unsigned int K){
     unsigned int i;
 
     for(i=1; i<K; i++){
-        memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+        memcpy(cbuf_pointer_to_write (circular_buf), buf, requestedFragmentSize);
     }
+}
+
+void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat){
+
+    int i;
+    uint8_t* u8_pointer = (uint8_t*)noise_pointer;
+    int16_t* s16_pointer = (int16_t*)noise_pointer;
+    int size;
+
+    if(sndCardFormat == U8){
+
+        size = sizeof(uint8_t);
+        for(i=0; i<fragmentSize; i= i + size){
+            if((*u8_pointer > (ZERO_U8 - MA_U8)) && (*u8_pointer < (ZERO_U8 + MA_U8))){
+                silence_frames = silence_frames + 1;
+            }
+            num_frames = num_frames + 1;
+            u8_pointer = u8_pointer + 1;
+        }
+
+    }else if(sndCardFormat == S16_LE){
+        // Falta con 16 bits
+    }
+
 }
 
 
