@@ -49,10 +49,7 @@ void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 void detect_silence(void* buf, int fragmentSize, int sndCardFormat);
 void insert_repeated_packets(void* buf, int requestedFragmentSize, unsigned int K);
-void create_comfort_noise(void* noise_pointer, int requestedFragmentSize, int sndCardFormat);
-
-
-// void * create_fill_cbuf(int numberOfBlocks, int BlockSize, int descriptor);
+void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
@@ -60,6 +57,8 @@ const float MILI_PER_SEC = 1000.0;
 const uint8_t ZERO_U8 = 128;
 const uint8_t MA_U8 = 4;
 const float PMA = 0.7;
+const int SIZE_NOISE_U8 = 16;
+const uint8_t NOISE_FRAGMENT_U8[] = {127,127,127,127,127,127,128,128,128,128,128,127,127,127,128,127};
 
 /* only declare here variables which are used inside the signal handler */
 void *buf_rcv = NULL;
@@ -67,6 +66,7 @@ void *buf_send = NULL;
 void *bufheader = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
 void *circular_buf = NULL;
+void *noise_pointer = NULL;
 
 
 /* activated by Ctrl-C */
@@ -77,6 +77,7 @@ void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unu
     if (buf_send) free(buf_send);
     if (fileName) free(fileName);
     if (circular_buf) cbuf_destroy_buffer (circular_buf);
+    if (noise_pointer) free(noise_pointer);
     exit (0);
 }
 
@@ -179,6 +180,9 @@ void main(int argc, char *argv[])
 
     circular_buf = cbuf_create_buffer(numberOfBlocks + ms2bytes(200, rate, channelNumber, sndCardFormat), requestedFragmentSize);
 
+    noise_pointer = malloc (requestedFragmentSize);
+    create_comfort_noise(noise_pointer, requestedFragmentSize, sndCardFormat);
+
 
     while(buffering){
 
@@ -243,6 +247,8 @@ void main(int argc, char *argv[])
                         memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                     }else if(K < 4){
                         insert_repeated_packets(buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize, K);
+                    }else {
+                        insert_repeated_packets(noise_pointer, requestedFragmentSize, K);
                     }
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
@@ -263,7 +269,7 @@ void main(int argc, char *argv[])
 
     }
 
-    exit (1);
+    exit (0);
 
 
 
@@ -382,12 +388,9 @@ void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardForm
 
     if(sndCardFormat == U8){
 
-        size = sizeof(uint8_t);
+        size = sizeof(uint8_t) * SIZE_NOISE_U8;
         for(i=0; i<fragmentSize; i= i + size){
-            if((*u8_pointer > (ZERO_U8 - MA_U8)) && (*u8_pointer < (ZERO_U8 + MA_U8))){
-                silence_frames = silence_frames + 1;
-            }
-            num_frames = num_frames + 1;
+            memcpy(u8_pointer, NOISE_FRAGMENT_U8, size);
             u8_pointer = u8_pointer + 1;
         }
 
