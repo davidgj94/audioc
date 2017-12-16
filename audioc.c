@@ -114,6 +114,7 @@ void main(int argc, char *argv[])
     unsigned int K = 0;
 
 
+
     /* we configure the signal */
     sigInfo.sa_handler = signalHandler;
     sigInfo.sa_flags = 0;
@@ -144,12 +145,15 @@ void main(int argc, char *argv[])
     }
 
     requestedFragmentSize = ms2bytes(packetDuration, rate, channelNumber, sndCardFormat);
-    numberOfBlocks = (int) ((float) ms2bytes(bufferingTime, rate, channelNumber, sndCardFormat) / (float) requestedFragmentSize);
 
     /* create snd descritor and configure soundcard to given format, rate, number of channels.
 
      * Also configures fragment size */
     configSndcard (&descriptorSnd, &sndCardFormat, &channelNumber, &rate, &requestedFragmentSize);
+
+    numberOfBlocks = ms2bytes(bufferingTime + 200, rate, channelNumber, sndCardFormat) / requestedFragmentSize;
+    printf("numberOfBlocks: %d\n", numberOfBlocks);
+
     vol = configVol (channelNumber, descriptorSnd, vol);
 
     args_print_audioc(multicastIp, ssrc, port, packetDuration, payload, bufferingTime, vol, verbose);
@@ -181,6 +185,10 @@ void main(int argc, char *argv[])
     circular_buf = cbuf_create_buffer(numberOfBlocks + ms2bytes(200, rate, channelNumber, sndCardFormat), requestedFragmentSize);
 
     noise_pointer = malloc (requestedFragmentSize);
+    if (buf_send == NULL) {
+        printf("Could not reserve memory for comfort noise.\n");
+        exit (1); /* very unusual case */
+    }
     create_comfort_noise(noise_pointer, requestedFragmentSize, sndCardFormat);
 
 
@@ -434,3 +442,4 @@ void detect_silence(void *buf, int fragmentSize, int sndCardFormat){
 
     
 }
+
