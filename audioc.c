@@ -48,8 +48,9 @@ void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 void detect_silence(void* buf, int fragmentSize, int sndCardFormat);
-void insert_repeated_packets(void* buf, int requestedFragmentSize, unsigned int K);
+void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K);
 void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat);
+int check_write_cbuf(void* circular_buf, void* content_pointer, int size);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
@@ -192,19 +193,15 @@ void main(int argc, char *argv[])
         exit (1); /* very unusual case */
     }
     create_comfort_noise(noise_pointer, requestedFragmentSize, sndCardFormat);
-    
-    // void* aux_pointer;
+
     // while(buffering){
-    //     printf("%d\n", j_asdf);
-    //     aux_pointer = cbuf_pointer_to_write (circular_buf);
-    //     buffering = (aux_pointer != NULL);
-    //     if(buffering) memcpy(aux_pointer, noise_pointer, requestedFragmentSize);
-    //     j_asdf++;
+    //     buffering = check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize);
     // }
     // exit(0);
 
     tiempo.tv_sec = 10;
     tiempo.tv_usec = 0;
+    
     while(buffering){
 
         FD_ZERO(&reading_set);
@@ -267,18 +264,18 @@ void main(int argc, char *argv[])
                 if(i == 0){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-                    memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+                    check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                     i++;
                     printf("Buffering ...\n");
                 }else if(seqNum_actual > seqNum_anterior){
                     K = seqNum_actual - seqNum_anterior;
                     printf("K: %d\n", K);
                     if(K == 1){
-                        memcpy(cbuf_pointer_to_write (circular_buf), buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
+                        check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize);
                     }else if(K < 4){
-                        insert_repeated_packets(buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize, K);
+                        insert_repeated_packets(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize, K);
                     }else {
-                        insert_repeated_packets(noise_pointer, requestedFragmentSize, K);
+                        insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K);
                     }
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
@@ -400,11 +397,11 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     return numberOfSamples * bytesPerSample;
 }
 
-void insert_repeated_packets(void* buf, int requestedFragmentSize, unsigned int K){
+void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K){
     unsigned int i;
 
     for(i=1; i<K; i++){
-        memcpy(cbuf_pointer_to_write (circular_buf), buf, requestedFragmentSize);
+        check_write_cbuf(circular_buf, buf, requestedFragmentSize);
     }
 }
 
@@ -462,5 +459,17 @@ void detect_silence(void *buf, int fragmentSize, int sndCardFormat){
     } 
 
     
+}
+
+int check_write_cbuf(void* circular_buf, void* content_pointer, int size){
+    void* to_write_pointer = cbuf_pointer_to_write (circular_buf);
+    int result = (to_write_pointer != NULL);
+    if (result){
+        printf("insertar cbuf\n");
+        memcpy(to_write_pointer, content_pointer, size);
+    }else{
+        printf("cbuf lleno\n");
+    }
+    return result;
 }
 
