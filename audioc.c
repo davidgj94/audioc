@@ -111,7 +111,8 @@ void main(int argc, char *argv[])
     unsigned int seqNum_anterior = 0;
     unsigned int seqNum_actual = 0;
     unsigned long int ssrc = 0;
-    rtp_hdr_t * hdr_message;
+    rtp_hdr_t * hdr = NULL;
+    char * audioData = NULL;
     unsigned int K = 0;
     unsigned int K_t = 0;
     int j_asdf = 0;
@@ -240,6 +241,8 @@ void main(int argc, char *argv[])
                 (*hdr_message).ssrc = htonl(ssrc);
                 (*hdr_message).seq = htons(nseq);
                 (*hdr_message).ts = htonl(timeStamp);
+
+                audioData = (char *)(hdr_message + 1);
     
                 update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
                 if(j_asdf%2){
