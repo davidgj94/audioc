@@ -45,13 +45,14 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include "rtp.h"
 
 void update_buffer(int descriptor, void *buffer, int size);
-void play(int descriptor, void *buffer, int size);
+void play(int descriptor, void *buffer, int size, unsigned int * current_blocks);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
+// int bytes2ms(int numBytes, int rate, int channelNumber, int sndCardFormat);
 int detect_silence(void* buf, int fragmentSize, int sndCardFormat);
-int insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, int numberOfBlocks,unsigned int current_blocks);
+void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks);
 void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat);
-int check_write_cbuf(void* circular_buf, void* content_pointer, int size);
-void get_diff_times(struct timeval* last_timeval, struct timeval* diff_times);
+int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks);
+float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
@@ -111,7 +112,7 @@ void main(int argc, char *argv[])
     unsigned int seqNum_anterior = 0;
     unsigned int seqNum_actual = 0;
     unsigned long int ssrc = 0;
-    rtp_hdr_t * hdr = NULL;
+    rtp_hdr_t * hdr_message = NULL;
     char * audioData = NULL;
     unsigned int K = 0;
     unsigned int K_t = 0;
@@ -244,7 +245,7 @@ void main(int argc, char *argv[])
 
                 audioData = (char *)(hdr_message + 1);
     
-                update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
+                update_buffer(descriptorSnd, audioData, requestedFragmentSize);
                 if(j_asdf%2){
                     printf("Impar -> mando\n");
                     easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
@@ -269,6 +270,8 @@ void main(int argc, char *argv[])
                 timeStamp_actual = ntohl((*hdr_message).ts);
                 seqNum_actual = ntohs((*hdr_message).seq);
 
+                audioData = (char *)(hdr_message + 1);
+
                 printf("current_blocks: %d\n", current_blocks);
                 printf("timeStamp_actual: %lu\n", timeStamp_actual);
                 printf("seqNum_actual: %d\n", seqNum_actual);
@@ -276,19 +279,18 @@ void main(int argc, char *argv[])
                 if(current_blocks == 0){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-                    if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                 }else if(seqNum_actual > seqNum_anterior){
                     K = seqNum_actual - seqNum_anterior;
                     printf("K: %d\n", K);
                     if(K == 1){
-                        if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }else if(K < 4){
-                        current_blocks = current_blocks + 
-                            insert_repeated_packets(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize, K - 1, numberOfBlocks, current_blocks);
+                        insert_repeated_packets(circular_buf, audioData, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
+                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }else {
-                        current_blocks = current_blocks +
-                             insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, current_blocks);
-                        if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                        insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
+                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
@@ -307,7 +309,7 @@ void main(int argc, char *argv[])
 
     }
 
-    
+    float diff_times_float;
     while(1){
 
         FD_ZERO(&reading_set);
@@ -328,8 +330,7 @@ void main(int argc, char *argv[])
 
             if(FD_ISSET (descriptorSnd, &writing_set) == 1){
                 printf("Playing ...\n");
-                play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize);
-                current_blocks--;
+                play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks);
             }
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
@@ -346,12 +347,14 @@ void main(int argc, char *argv[])
                 (*hdr_message).ssrc = htonl(ssrc);
                 (*hdr_message).seq = htons(nseq);
                 (*hdr_message).ts = htonl(timeStamp);
-	
-                update_buffer(descriptorSnd, buf_send + sizeof(rtp_hdr_t), requestedFragmentSize);
 
-                get_diff_times(&last_timeval, &diff_times);
-                if((diff_times.tv_sec > 10) && (diff_times.tv_usec > 0)){
-                    if(!detect_silence(buf_send + sizeof(rtp_hdr_t), requestedFragmentSize, sndCardFormat)){
+                audioData = (char *)(hdr_message + 1);
+	
+                update_buffer(descriptorSnd, audioData, requestedFragmentSize);
+
+                diff_times_float = get_diff_times(&last_timeval, &diff_times);
+                if(diff_times_float > 10){
+                    if(!detect_silence(audioData, requestedFragmentSize, sndCardFormat)){
                         easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                         nseq = nseq + 1;
                     }
@@ -371,23 +374,31 @@ void main(int argc, char *argv[])
                 timeStamp_actual = ntohl((*hdr_message).ts);
 		        seqNum_actual = ntohs((*hdr_message).seq);
 
+                audioData = (char *)(hdr_message + 1);
+
                 if(seqNum_actual > seqNum_anterior){
 
                     K = seqNum_actual - seqNum_anterior;
                     K_t = (unsigned int)(timeStamp_actual - timeStamp_anterior) / requestedFragmentSize;
+
                     printf("K: %d\n", K);
                     printf("K_t: %d\n", K_t);
 
-                    if(K_t > 1) num_blocks_to_write = K_t - num_times_timer - 1;
+                    if(K_t > 1){
+                        if(K_t > num_times_timer){
+                            num_blocks_to_write = K_t - num_times_timer - 1;
+                        }else{
+                            num_blocks_to_write = 0;
+                        }
+                    }
 
                     if(K == 1){
 
                         if(K_t == 1){
-                            if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                            check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                         }else if(K_t > 1){
-                            current_blocks = current_blocks + 
-                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, current_blocks);
-                            if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                            insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
+                            check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                         }
                         
                     }else if(K > 1){
@@ -395,19 +406,16 @@ void main(int argc, char *argv[])
                         if (K_t == K){
 
                             if(K_t < 4){
-                                current_blocks = current_blocks + 
-                                    insert_repeated_packets(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize, num_blocks_to_write, numberOfBlocks, current_blocks);
-                                if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                                insert_repeated_packets(circular_buf, audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
+                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                             }else {
-                                current_blocks = current_blocks + 
-                                    insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, current_blocks);
-                                if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
+                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                             }
 
                         }else if(K_t > K){
-                            current_blocks = current_blocks + 
-                                    insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, current_blocks);
-                            if(check_write_cbuf(circular_buf, buf_rcv + sizeof(rtp_hdr_t), requestedFragmentSize)) current_blocks++;
+                            insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
+                            check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                         }
 
                     }
@@ -431,19 +439,21 @@ void main(int argc, char *argv[])
 
 
 
-void play(int descriptor, void *buffer, int size){
+void play(int descriptor, void *buffer, int size, unsigned int * current_blocks){
     int n_bytes;
     n_bytes = write (descriptor, buffer, size);
-    if (n_bytes!= size)
+    if (n_bytes!= size){
         printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
+    }else{
+        (*current_blocks)--;
+    }
     // printf (".");fflush (stdout);
 }
 
 void update_buffer(int descriptor, void *buffer, int size){
     int n_bytes;
     n_bytes = read (descriptor, buffer, size);
-    if (n_bytes!= size)
-        printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
+    if (n_bytes!= size) printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
     // printf ("*");fflush (stdout);
 
 }
@@ -455,25 +465,29 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     return numberOfSamples * bytesPerSample;
 }
 
-int insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, int numberOfBlocks, int current_blocks){
+// int bytes2ms(int numBytes, int rate, int channelNumber, int sndCardFormat){
+//     int numberOfSamples = (int) (
+//         ((float) duration / MILI_PER_SEC) * (float) rate);
+//     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
+//     return numberOfSamples * bytesPerSample;
+// }
+
+
+void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks){
     unsigned int i;
-    int num_inserted_blocks = 0;
     int inserted_block;
 
-    if((numberOfBlocks - current_blocks) < K){
-        K = numberOfBlocks - current_blocks - 1;
+    if((numberOfBlocks - (*current_blocks)) < K){
+        K = numberOfBlocks - (*current_blocks) - 1;
     }
 
     for(i=0; i<K; i++){
-        inserted_block = check_write_cbuf(circular_buf, buf, requestedFragmentSize);
-        if(inserted_block == 1){
-            num_inserted_blocks++;
-        }else if(inserted_block == 0){
+        inserted_block = check_write_cbuf(circular_buf, buf, requestedFragmentSize, current_blocks);
+        if(inserted_block == 0){
             break;
         }
     }
 
-    return num_inserted_blocks;
 }
 
 void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat){
@@ -533,7 +547,7 @@ int detect_silence(void *buf, int fragmentSize, int sndCardFormat){
     
 }
 
-int check_write_cbuf(void* circular_buf, void* content_pointer, int size){
+int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks){
     void* to_write_pointer = cbuf_pointer_to_write (circular_buf);
     int inserted_block = 0;
 
@@ -541,14 +555,17 @@ int check_write_cbuf(void* circular_buf, void* content_pointer, int size){
         printf("insertar cbuf\n");
         memcpy(to_write_pointer, content_pointer, size);
         inserted_block = 1;
+        (*current_blocks)++;
     }else{
         printf("cbuf lleno\n");
     }
     return inserted_block;
 }
 
-void get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){
+float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){
     struct timeval current_timeval;
+    float secs;
+    float micro_secs;
 
     if (gettimeofday (&current_timeval, NULL) <0) {
         printf("asdf\n");
@@ -556,8 +573,12 @@ void get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){
 
     timersub(&current_timeval, last_timeval, diff_times);
 
-    printf("La diferencia de tiempos es %ld.%6ld", (*diff_times).tv_sec, (*diff_times).tv_usec);
-    //printf ("El tiempo medido es %ld.%6ld", (*last_timeval).tv_sec, (*last_timeval).tv_usec);
+    secs = (float) (*diff_times).tv_sec;
+    micro_secs = ((float) (*diff_times).tv_usec) / MILI_PER_SEC;
+
+    printf("La diferencia de tiempos es %f", secs + micro_secs);
+    
+    return secs + micro_secs;
 
 }
 
