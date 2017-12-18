@@ -210,7 +210,7 @@ void main(int argc, char *argv[])
         printf("asdf\n");
     }
 
-    printf ("El tiempo medido es %ld.%6ld", last_timeval.tv_sec, last_timeval.tv_usec); 
+    printf ("El tiempo medido es %ld.%6ld\n", last_timeval.tv_sec, last_timeval.tv_usec); 
 
 
     unsigned int current_blocks = 0;
@@ -313,6 +313,8 @@ void main(int argc, char *argv[])
     }
 
     struct timeval silence_timer;
+    silence_timer.tv_sec = 1;
+    silence_timer.tv_usec = 0;
     while(1){
 
         FD_ZERO(&reading_set);
@@ -324,7 +326,7 @@ void main(int argc, char *argv[])
             FD_SET(descriptorSnd, &writing_set);
         }
         
-        reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
+        //reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
 
         if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, &silence_timer)) < 0) {
             printf("Select failed");
@@ -361,12 +363,16 @@ void main(int argc, char *argv[])
 	
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
 
-                if(get_diff_times(&last_timeval, &diff_times) > 10){
-                    if(!detect_silence(audioData, requestedFragmentSize, sndCardFormat)){
+                if(detect_silence(audioData, requestedFragmentSize, sndCardFormat)){
+                    if(get_diff_times(&last_timeval, &diff_times) < 10){
                         easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                         nseq = nseq + 1;
                     }
+                }else{
+                    easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
+                    nseq = nseq + 1;
                 }
+
                 
 				timeStamp = timeStamp + requestedFragmentSize;
                        
@@ -438,7 +444,10 @@ void main(int argc, char *argv[])
                 printf("--------------------------------------------------------------------\n");
 
             }
+
+            reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
         }
+
 
     }
 
@@ -457,6 +466,7 @@ void play(int descriptor, void *buffer, int size, unsigned int * current_blocks)
         (*current_blocks)--;
     }
     // printf (".");fflush (stdout);
+    printf("current_blocks: %d\n", *current_blocks);
 }
 
 void update_buffer(int descriptor, void *buffer, int size){
@@ -489,7 +499,7 @@ void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardForm
         printf("Error bytesDuration < 0\n");
     }
 
-    printf ("El timer sonará en %ld.%6ld", (*timer).tv_sec, (*timer).tv_usec);
+    printf ("El timer sonara en %ld.%6ld\n", (*timer).tv_sec, (*timer).tv_usec);
     
 }
 
@@ -498,8 +508,10 @@ void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmen
     unsigned int i;
     int inserted_block;
 
+    printf("if es  %d\n", numberOfBlocks - (*current_blocks));
     if((numberOfBlocks - (*current_blocks)) < K){
         K = numberOfBlocks - (*current_blocks) - 1;
+        printf("K_new es %d\n", K);
     }
 
     for(i=0; i<K; i++){
@@ -580,6 +592,9 @@ int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsign
     }else{
         printf("cbuf lleno\n");
     }
+
+    printf("current_blocks: %d\n", *current_blocks);
+    
     return inserted_block;
 }
 
