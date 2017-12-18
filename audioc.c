@@ -37,6 +37,8 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <sys/ioctl.h>
+#include <sys/soundcard.h>
 
 #include "audiocArgs.h"
 #include "circularBuffer.h"
@@ -47,15 +49,16 @@ gcc -Wall -Wextra -o audioc audiocArgs.c circularBuffer.c configureSndcard.c eas
 void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size, unsigned int * current_blocks);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
-// int bytes2ms(int numBytes, int rate, int channelNumber, int sndCardFormat);
 int detect_silence(void* buf, int fragmentSize, int sndCardFormat);
 void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks);
 void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat);
 int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks);
 float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times);
+void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardFormat, struct timeval* timer);
 
 const int BITS_PER_BYTE = 8;
 const float MILI_PER_SEC = 1000.0;
+const float MICRO_PER_MILI = 1000.0;
 
 const uint8_t ZERO_U8 = 128;
 const uint8_t MA_U8 = 4;
@@ -309,7 +312,7 @@ void main(int argc, char *argv[])
 
     }
 
-    float diff_times_float;
+    struct timeval silence_timer;
     while(1){
 
         FD_ZERO(&reading_set);
@@ -321,10 +324,16 @@ void main(int argc, char *argv[])
             FD_SET(descriptorSnd, &writing_set);
         }
         
+        reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
 
-        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
+        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, &silence_timer)) < 0) {
             printf("Select failed");
             exit(1);
+
+        }else if(res == 0){
+            printf("Rellenando con silencios");
+            check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
+            num_times_timer++;
 
         }else{
 
@@ -352,8 +361,7 @@ void main(int argc, char *argv[])
 	
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
 
-                diff_times_float = get_diff_times(&last_timeval, &diff_times);
-                if(diff_times_float > 10){
+                if(get_diff_times(&last_timeval, &diff_times) > 10){
                     if(!detect_silence(audioData, requestedFragmentSize, sndCardFormat)){
                         easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                         nseq = nseq + 1;
@@ -423,6 +431,7 @@ void main(int argc, char *argv[])
                     num_times_timer = 0;
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
+
                     
                 }
 
@@ -459,18 +468,30 @@ void update_buffer(int descriptor, void *buffer, int size){
 }
 
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
-    int numberOfSamples = (int) (
-        ((float) duration / MILI_PER_SEC) * (float) rate);
+    int numberOfSamples = (int) (((float) duration / MILI_PER_SEC) * (float) rate);
     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
     return numberOfSamples * bytesPerSample;
 }
 
-// int bytes2ms(int numBytes, int rate, int channelNumber, int sndCardFormat){
-//     int numberOfSamples = (int) (
-//         ((float) duration / MILI_PER_SEC) * (float) rate);
-//     int bytesPerSample = channelNumber * sndCardFormat / BITS_PER_BYTE;
-//     return numberOfSamples * bytesPerSample;
-// }
+void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardFormat, struct timeval* timer){
+    int numBytes;
+    ioctl(descriptorSnd, SNDCTL_DSP_GETODELAY, &numBytes);
+    int numberOfSamples = numBytes / (channelNumber * sndCardFormat / BITS_PER_BYTE);
+    float bytesDuration = (float) numberOfSamples / (float) rate;
+
+    bytesDuration = bytesDuration - 10 / MILI_PER_SEC;
+    if(bytesDuration > 0){
+        (*timer).tv_sec = (long) bytesDuration;
+        (*timer).tv_usec = (long)((bytesDuration - (float) (*timer).tv_sec) * MILI_PER_SEC * MICRO_PER_MILI);
+    }else{
+        (*timer).tv_sec = 0;
+        (*timer).tv_usec = 0;
+        printf("Error bytesDuration < 0\n");
+    }
+
+    printf ("El timer sonará en %ld.%6ld", (*timer).tv_sec, (*timer).tv_usec);
+    
+}
 
 
 void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks){
@@ -527,7 +548,7 @@ int detect_silence(void *buf, int fragmentSize, int sndCardFormat){
 
         size = sizeof(uint8_t);
         for(i=0; i<fragmentSize; i= i + size){
-            if((*u8_pointer > (ZERO_U8 - MA_U8)) && (*u8_pointer < (ZERO_U8 + MA_U8))){
+            if(((*u8_pointer) > (ZERO_U8 - MA_U8)) && ((*u8_pointer) < (ZERO_U8 + MA_U8))){
                 silence_frames = silence_frames + 1;
             }
             num_frames = num_frames + 1;
