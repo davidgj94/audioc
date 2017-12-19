@@ -334,7 +334,7 @@ void main(int argc, char *argv[])
             exit(1);
 
         }else if(res == 0){
-            printf("Rellenando con silencios");
+            printf("Rellenando con silencios\n");
             check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
             num_times_timer++;
 
@@ -446,8 +446,9 @@ void main(int argc, char *argv[])
 
             }
 
-            reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
         }
+
+        reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
 
 
     }
@@ -574,7 +575,7 @@ int detect_silence(void *buf, int fragmentSize, int sndCardFormat){
 
     percentage_silence = (float)silence_frames / (float)num_frames;
     if(percentage_silence > PMA){
-        printf("Silence detected");
+        printf("Silence detected\n");
     } 
 
     return (percentage_silence > PMA);
@@ -613,7 +614,7 @@ float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){
     secs = (float) (*diff_times).tv_sec;
     micro_secs = ((float) (*diff_times).tv_usec) / MILI_PER_SEC;
 
-    printf("La diferencia de tiempos es %f", secs + micro_secs);
+    printf("La diferencia de tiempos es %f\n", secs + micro_secs);
     
     return secs + micro_secs;
 
