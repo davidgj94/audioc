@@ -252,14 +252,8 @@ void main(int argc, char *argv[])
                 audioData = (char *)(hdr_message + 1);
     
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-                if(j_asdf%2){
-                    printf("Impar -> mando\n");
-                    easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-                }else{
-                    printf("Par -> no mando\n");
-                }
-                
-                    
+        
+                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));   
                 nseq = nseq + 1;
                 timeStamp = timeStamp + requestedFragmentSize;
                 j_asdf++;
@@ -282,26 +276,11 @@ void main(int argc, char *argv[])
                 printf("timeStamp_actual: %lu\n", timeStamp_actual);
                 printf("seqNum_actual: %d\n", seqNum_actual);
 
-                if(current_blocks == 0){
-                    seqNum_anterior = seqNum_actual;
-                    timeStamp_anterior = timeStamp_actual;
-                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                }else if(seqNum_actual > seqNum_anterior){
-                    K = seqNum_actual - seqNum_anterior;
-                    printf("K: %d\n", K);
-                    if(K == 1){
-                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                    }else if(K < 4){
-                        insert_repeated_packets(circular_buf, audioData, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
-                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                    }else {
-                        insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
-                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                    }
-                    seqNum_anterior = seqNum_actual;
-                    timeStamp_anterior = timeStamp_actual;
-                    buffering = (current_blocks < numberOfBlocks);
-                }
+                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+
+                seqNum_anterior = seqNum_actual;
+                timeStamp_anterior = timeStamp_actual;
+                buffering = (current_blocks < numberOfBlocks);
 
                 printf("timeStamp_anterior: %lu\n", timeStamp_anterior);
                 printf("seqNum_anterior: %d\n", seqNum_anterior);
@@ -333,7 +312,7 @@ void main(int argc, char *argv[])
             printf("NOOOOO Hay espacio\n");
         }
 
-        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, &silence_timer)) < 0) {
+        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
             printf("Select failed");
             exit(1);
 
@@ -369,18 +348,8 @@ void main(int argc, char *argv[])
                 audioData = (char *)(hdr_message + 1);
 	
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-
-                if(detect_silence(audioData, requestedFragmentSize, sndCardFormat)){
-                    if(get_diff_times(&last_timeval, &diff_times) < 10){
-                        easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-                        nseq = nseq + 1;
-                    }
-                }else{
-                    easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-                    nseq = nseq + 1;
-                }
-
-                
+                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
+                nseq = nseq + 1;
 				timeStamp = timeStamp + requestedFragmentSize;
                        
             }
@@ -397,56 +366,11 @@ void main(int argc, char *argv[])
 
                 audioData = (char *)(hdr_message + 1);
 
-                if(seqNum_actual > seqNum_anterior){
+                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
 
-                    K = seqNum_actual - seqNum_anterior;
-                    K_t = (unsigned int)(timeStamp_actual - timeStamp_anterior) / requestedFragmentSize;
-
-                    printf("K: %d\n", K);
-                    printf("K_t: %d\n", K_t);
-
-                    if(K_t > 1){
-                        if(K_t > num_times_timer){
-                            num_blocks_to_write = K_t - num_times_timer - 1;
-                        }else{
-                            num_blocks_to_write = 0;
-                        }
-                    }
-
-                    if(K == 1){
-
-                        if(K_t == 1){
-                            check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                        }else if(K_t > 1){
-                            insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                            check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                        }
-                        
-                    }else if(K > 1){
-
-                        if (K_t == K){
-
-                            if(K_t < 4){
-                                insert_repeated_packets(circular_buf, audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                            }else {
-                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                            }
-
-                        }else if(K_t > K){
-                            insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                            check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
-                        }
-
-                    }
-
-                    num_times_timer = 0;
-                    seqNum_anterior = seqNum_actual;
-                    timeStamp_anterior = timeStamp_actual;
-
-                    
-                }
+                num_times_timer = 0;
+                seqNum_anterior = seqNum_actual;
+                timeStamp_anterior = timeStamp_actual;
 
                 printf("--------------------------------------------------------------------\n");
 
@@ -454,7 +378,7 @@ void main(int argc, char *argv[])
 
         }
 
-        reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
+        ///reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
 
 
     }
