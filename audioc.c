@@ -321,12 +321,13 @@ void main(int argc, char *argv[])
         FD_SET(descriptorSnd, &reading_set);
         FD_SET(sockId, &reading_set);
 
+        FD_ZERO(&writing_set);
         if(cbuf_has_block(circular_buf)){
-            FD_ZERO(&writing_set);
+            printf("Hay espacio\n");
             FD_SET(descriptorSnd, &writing_set);
+        }else{
+            printf("NOOOOO Hay espacio\n");
         }
-        
-        //reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
 
         if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, &silence_timer)) < 0) {
             printf("Select failed");
@@ -594,7 +595,7 @@ int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsign
     }
 
     printf("current_blocks: %d\n", *current_blocks);
-    
+
     return inserted_block;
 }
 
