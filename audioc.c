@@ -199,11 +199,6 @@ void main(int argc, char *argv[])
     }
     create_comfort_noise(noise_pointer, requestedFragmentSize, sndCardFormat);
 
-    // while(buffering){
-    //     buffering = check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize);
-    // }
-    // exit(0);
-
     struct timeval last_timeval;
     struct timeval diff_times;
     if (gettimeofday (&last_timeval, NULL) <0) {
@@ -215,6 +210,14 @@ void main(int argc, char *argv[])
 
     unsigned int current_blocks = 0;
     unsigned int num_blocks_to_write;
+
+      while(buffering){
+        check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
+        play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks);
+        audioData = (char *)buf_send;
+        update_buffer(descriptorSnd, audioData, requestedFragmentSize);
+        detect_silence(audioData, requestedFragmentSize, sndCardFormat);
+    }
 
     while(buffering){
 
@@ -490,6 +493,7 @@ void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardForm
     ioctl(descriptorSnd, SNDCTL_DSP_GETODELAY, &numBytes);
     int numberOfSamples = numBytes / (channelNumber * sndCardFormat / BITS_PER_BYTE);
     float bytesDuration = (float) numberOfSamples / (float) rate;
+    printf("%f\n", bytesDuration);
 
     bytesDuration = bytesDuration - 10 / MILI_PER_SEC;
     if(bytesDuration > 0){
@@ -612,7 +616,7 @@ float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){
     timersub(&current_timeval, last_timeval, diff_times);
 
     secs = (float) (*diff_times).tv_sec;
-    micro_secs = ((float) (*diff_times).tv_usec) / MILI_PER_SEC;
+    micro_secs = ((float) (*diff_times).tv_usec) / (MILI_PER_SEC * MICRO_PER_MILI);
 
     printf("La diferencia de tiempos es %f\n", secs + micro_secs);
     
