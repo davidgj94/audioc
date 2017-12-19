@@ -252,17 +252,9 @@ void main(int argc, char *argv[])
                 audioData = (char *)(hdr_message + 1);
     
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-                if(j_asdf%2){
-                    printf("Impar -> mando\n");
-                    easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-                }else{
-                    printf("Par -> no mando\n");
-                }
-                
-                    
+                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                 nseq = nseq + 1;
                 timeStamp = timeStamp + requestedFragmentSize;
-                j_asdf++;
                        
             }
 
@@ -333,7 +325,7 @@ void main(int argc, char *argv[])
             printf("NOOOOO Hay espacio\n");
         }
 
-        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, &silence_timer)) < 0) {
+        if ((res = select (FD_SETSIZE, &reading_set, &writing_set, NULL, NULL)) < 0) {
             printf("Select failed");
             exit(1);
 
@@ -454,7 +446,7 @@ void main(int argc, char *argv[])
 
         }
 
-        reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
+        //reset_timer(descriptorSnd, rate, channelNumber, sndCardFormat, &silence_timer);
 
 
     }
