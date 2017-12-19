@@ -211,13 +211,13 @@ void main(int argc, char *argv[])
     unsigned int current_blocks = 0;
     unsigned int num_blocks_to_write;
 
-      while(buffering){
-        check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
-        play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks);
-        audioData = (char *)buf_send;
-        update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-        detect_silence(audioData, requestedFragmentSize, sndCardFormat);
-    }
+    //   while(buffering){
+    //     check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
+    //     play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks);
+    //     audioData = (char *)buf_send;
+    //     update_buffer(descriptorSnd, audioData, requestedFragmentSize);
+    //     detect_silence(audioData, requestedFragmentSize, sndCardFormat);
+    // }
 
     while(buffering){
 
@@ -318,6 +318,7 @@ void main(int argc, char *argv[])
     struct timeval silence_timer;
     silence_timer.tv_sec = 1;
     silence_timer.tv_usec = 0;
+    int numBytes;
     while(1){
 
         FD_ZERO(&reading_set);
@@ -346,6 +347,8 @@ void main(int argc, char *argv[])
             if(FD_ISSET (descriptorSnd, &writing_set) == 1){
                 printf("Playing ...\n");
                 play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks);
+                ioctl(descriptorSnd, SNDCTL_DSP_GETODELAY, &numBytes);
+                printf("numBytes es %d\n",numBytes);
             }
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
@@ -491,9 +494,10 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
 void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardFormat, struct timeval* timer){
     int numBytes;
     ioctl(descriptorSnd, SNDCTL_DSP_GETODELAY, &numBytes);
+    printf("numBytes es %d\n",numBytes);
     int numberOfSamples = numBytes / (channelNumber * sndCardFormat / BITS_PER_BYTE);
     float bytesDuration = (float) numberOfSamples / (float) rate;
-    printf("%f\n", bytesDuration);
+    printf("bytesDuration es %f\n", bytesDuration);
 
     bytesDuration = bytesDuration - 10 / MILI_PER_SEC;
     if(bytesDuration > 0){
