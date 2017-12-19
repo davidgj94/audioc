@@ -514,7 +514,7 @@ void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmen
     unsigned int i;
     int inserted_block;
 
-    printf("if es  %d\n", numberOfBlocks - (*current_blocks));
+    printf("if es  %d\n", (numberOfBlocks - (*current_blocks)) < K);
     if((numberOfBlocks - (*current_blocks)) < K){
         K = numberOfBlocks - (*current_blocks) - 1;
         printf("K_new es %d\n", K);
