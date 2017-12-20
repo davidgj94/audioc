@@ -85,6 +85,7 @@ void signalHandler (int sigNum __attribute__ ((unused)))  /* __attribute__ ((unu
     if (fileName) free(fileName);
     if (circular_buf) cbuf_destroy_buffer (circular_buf);
     if (noise_pointer) free(noise_pointer);
+    if (last_audioData) free(last_audioData);
     exit (0);
 }
 
@@ -200,6 +201,13 @@ void main(int argc, char *argv[])
     }
     create_comfort_noise(noise_pointer, requestedFragmentSize, sndCardFormat);
 
+
+    last_audioData = malloc (requestedFragmentSize);
+    if (last_audioData == NULL) {
+        printf("Could not reserve memory for last_audioData.\n");
+        exit (1); /* very unusual case */
+    }
+
     struct timeval last_timeval;
     struct timeval diff_times;
     if (gettimeofday (&last_timeval, NULL) <0) {
@@ -278,6 +286,7 @@ void main(int argc, char *argv[])
                 seqNum_actual = ntohs((*hdr_message).seq);
 
                 audioData = (char *)(hdr_message + 1);
+                memcpy(last_audioData, audioData, requestedFragmentSize);
 
                 printf("current_blocks: %d\n", current_blocks);
                 printf("timeStamp_actual: %lu\n", timeStamp_actual);
@@ -293,12 +302,13 @@ void main(int argc, char *argv[])
                     if(K == 1){
                         check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }else if(K < 4){
-                        insert_repeated_packets(circular_buf, audioData, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
+                        insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
                         check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }else {
                         insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
                         check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }
+                    
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
                     buffering = (current_blocks < numberOfBlocks);
@@ -315,6 +325,7 @@ void main(int argc, char *argv[])
         }
 
     }
+
 
     struct timeval silence_timer;
     silence_timer.tv_sec = 1;
@@ -397,6 +408,7 @@ void main(int argc, char *argv[])
 		        seqNum_actual = ntohs((*hdr_message).seq);
 
                 audioData = (char *)(hdr_message + 1);
+                memcpy(last_audioData, audioData, requestedFragmentSize);
 
                 if(seqNum_actual > seqNum_anterior){
 
@@ -428,7 +440,7 @@ void main(int argc, char *argv[])
                         if (K_t == K){
 
                             if(K_t < 4){
-                                insert_repeated_packets(circular_buf, audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
+                                insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
                                 check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                             }else {
                                 insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
