@@ -62,9 +62,14 @@ const float MICRO_PER_MILI = 1000.0;
 
 const uint8_t ZERO_U8 = 128;
 const uint8_t MA_U8 = 4;
+const int16_t ZERO_S16 = 0;
+const int16_t MA_S16 = 50;
 const float PMA = 0.7;
-const int SIZE_NOISE_U8 = 16;
+
+const int SIZE_NOISE = 16;
 const uint8_t NOISE_FRAGMENT_U8[] = {127,127,127,127,127,127,128,128,128,128,128,127,127,127,128,127};
+const int16_t NOISE_FRAGMENT_S16[] = {22,1,-14,-2,-1,6,12,19,24,21,7,4,-8,-12,0,-4};
+
 
 /* only declare here variables which are used inside the signal handler */
 void *buf_rcv = NULL;
@@ -220,12 +225,9 @@ void main(int argc, char *argv[])
     unsigned int current_blocks = 0;
     unsigned int num_blocks_to_write;
 
-    //   while(buffering){
+    // while(buffering){
     //     check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
     //     play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks);
-    //     audioData = (char *)buf_send;
-    //     update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-    //     detect_silence(audioData, requestedFragmentSize, sndCardFormat);
     // }
 
     while(buffering){
@@ -261,12 +263,12 @@ void main(int argc, char *argv[])
                 audioData = (char *)(hdr_message + 1);
     
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-                if(j_asdf%2){
-                    printf("Impar -> mando\n");
-                    easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-                }else{
-                    printf("Par -> no mando\n");
-                }
+                // if(j_asdf%2){
+                //     printf("Impar -> mando\n");
+                //     easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
+                // }else{
+                //     printf("Par -> no mando\n");
+                // }
                 
                     
                 nseq = nseq + 1;
@@ -308,7 +310,7 @@ void main(int argc, char *argv[])
                         insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
                         check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                     }
-                    
+
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
                     buffering = (current_blocks < numberOfBlocks);
@@ -531,11 +533,12 @@ void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmen
     unsigned int i;
     int inserted_block;
 
-    printf("if es  %d\n", (numberOfBlocks - (*current_blocks)) < K);
-    if((numberOfBlocks - (*current_blocks)) < K){
+    if((numberOfBlocks - (*current_blocks)) == 1){
+        return;
+    }else if((numberOfBlocks - (*current_blocks)) < K){
         K = numberOfBlocks - (*current_blocks) - 1;
-        printf("K_new es %d\n", K);
     }
+    
 
     for(i=0; i<K; i++){
         inserted_block = check_write_cbuf(circular_buf, buf, requestedFragmentSize, current_blocks);
@@ -555,14 +558,20 @@ void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardForm
 
     if(sndCardFormat == U8){
 
-        size = sizeof(uint8_t) * SIZE_NOISE_U8;
+        size = sizeof(uint8_t) * SIZE_NOISE;
         for(i=0; i<fragmentSize; i= i + size){
             memcpy(u8_pointer, NOISE_FRAGMENT_U8, size);
             u8_pointer = u8_pointer + 1;
         }
 
     }else if(sndCardFormat == S16_LE){
-        // Falta con 16 bits
+        
+        size = sizeof(int16_t) * SIZE_NOISE;
+        for(i=0; i<fragmentSize; i= i + size){
+            memcpy(s16_pointer, NOISE_FRAGMENT_S16, size);
+            s16_pointer = s16_pointer + 1;
+        }
+
     }
 
 }
@@ -583,6 +592,7 @@ int detect_silence(void *buf, int fragmentSize, int sndCardFormat){
 
         size = sizeof(uint8_t);
         for(i=0; i<fragmentSize; i= i + size){
+            printf("Muestra es %d\n", (*u8_pointer));
             if(((*u8_pointer) > (ZERO_U8 - MA_U8)) && ((*u8_pointer) < (ZERO_U8 + MA_U8))){
                 silence_frames = silence_frames + 1;
             }
@@ -591,13 +601,23 @@ int detect_silence(void *buf, int fragmentSize, int sndCardFormat){
         }
 
     }else if(sndCardFormat == S16_LE){
-        // Falta con 16 bits
+
+        size = sizeof(int16_t);
+        for(i=0; i<fragmentSize; i= i + size){
+            if(((*s16_pointer) > (ZERO_S16 - MA_S16)) && ((*s16_pointer) < (ZERO_S16 + MA_S16))){
+                silence_frames = silence_frames + 1;
+            }
+            num_frames = num_frames + 1;
+            s16_pointer = s16_pointer + 1;
+        }
     }
 
     percentage_silence = (float)silence_frames / (float)num_frames;
     if(percentage_silence > PMA){
         printf("Silence detected\n");
-    } 
+    }else{
+        printf("Audio\n");
+    }
 
     return (percentage_silence > PMA);
     
