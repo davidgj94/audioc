@@ -68,6 +68,7 @@ const uint8_t NOISE_FRAGMENT_U8[] = {127,127,127,127,127,127,128,128,128,128,128
 
 /* only declare here variables which are used inside the signal handler */
 void *buf_rcv = NULL;
+void *last_audioData = NULL;
 void *buf_send = NULL;
 void *bufheader = NULL;
 char *fileName = NULL;     /* Memory is allocated by audioSimpleArgs, remember to free it */
