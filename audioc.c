@@ -50,9 +50,9 @@ void update_buffer(int descriptor, void *buffer, int size);
 void play(int descriptor, void *buffer, int size, unsigned int * current_blocks);
 int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat);
 int detect_silence(void* buf, int fragmentSize, int sndCardFormat);
-void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks);
+void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks, int verbose_c);
 void create_comfort_noise(void* noise_pointer, int fragmentSize, int sndCardFormat);
-int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks);
+int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks, int verbose_c);
 float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times);
 void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardFormat, struct timeval* timer, unsigned int current_blocks, int requestedFragmentSize);
 
@@ -69,6 +69,11 @@ const float PMA = 0.7;
 const int SIZE_NOISE = 16;
 const uint8_t NOISE_FRAGMENT_U8[] = {127,127,127,127,127,127,128,128,128,128,128,127,127,127,128,127};
 const int16_t NOISE_FRAGMENT_S16[] = {22,1,-14,-2,-1,6,12,19,24,21,7,4,-8,-12,0,-4};
+
+const int INSERT = 0;
+const int SILENCE = 1;
+const int TIMER = 2;
+const int X = 2;
 
 
 /* only declare here variables which are used inside the signal handler */
@@ -131,7 +136,7 @@ void main(int argc, char *argv[])
     struct timeval last_timeval;
     struct timeval diff_times;
     unsigned int current_blocks = 0;
-    unsigned int current_blocks num_blocks_to_write;
+    unsigned int num_blocks_to_write;
 
 
     /* we configure the signal */
@@ -255,6 +260,8 @@ void main(int argc, char *argv[])
                     
                 nseq = nseq + 1;
                 timeStamp = timeStamp + requestedFragmentSize;
+
+                printf (".");fflush (stdout); //verbose(falta ponerlo opcional)
                        
             }
 
@@ -267,26 +274,28 @@ void main(int argc, char *argv[])
                 seqNum_actual = ntohs((*hdr_message).seq);
 
                 audioData = (char *)(hdr_message + 1);
-                memcpy(last_audioData, audioData, requestedFragmentSize);
 
                 if(current_blocks == 0){
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
-                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                 }else if(seqNum_actual > seqNum_anterior){
                     K = seqNum_actual - seqNum_anterior;
                     if(K == 1){
-                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                     }else if(K < 4){
-                        insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
-                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                        printf ("s");fflush (stdout); //verbose(falta ponerlo opcional)
+                        insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks, X);
+                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                     }else {
-                        insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks);
-                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                        printf ("s");fflush (stdout); //verbose(falta ponerlo opcional)
+                        insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, K - 1, numberOfBlocks, &current_blocks, X);
+                        check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                     }
 
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
+                    memcpy(last_audioData, audioData, requestedFragmentSize);
                     buffering = (current_blocks < numberOfBlocks);
                 }
                 
@@ -301,7 +310,6 @@ void main(int argc, char *argv[])
     timeStamp_timer = timeStamp_anterior;
     silence_timer.tv_sec = 1;
     silence_timer.tv_usec = 0;
-
     while(1){
 
         FD_ZERO(&reading_set);
@@ -318,13 +326,13 @@ void main(int argc, char *argv[])
             exit(1);
 
         }else if(res == 0){
-            if(check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks)){
+            if(check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks, TIMER)){
                 timeStamp_timer = timeStamp_timer + requestedFragmentSize;
             }
         }else{
 
             if(FD_ISSET (descriptorSnd, &writing_set) == 1){
-                play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks); //cambiar nombre y argumento cbuf_pointer_to_read por cbuf
+                play(descriptorSnd, cbuf_pointer_to_read (circular_buf), requestedFragmentSize, &current_blocks); //cambiar nombre de funcion y argumento cbuf_pointer_to_read por cbuf
             } 
 
             if(FD_ISSET (descriptorSnd, &reading_set) == 1){
@@ -349,10 +357,12 @@ void main(int argc, char *argv[])
                     if(get_diff_times(&last_timeval, &diff_times) < 10){
                         easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                         nseq = nseq + 1;
+                        printf (".");fflush (stdout); //verbose(falta ponerlo opcional)
                     }
                 }else{
                     easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                     nseq = nseq + 1;
+                    printf (".");fflush (stdout); //verbose(falta ponerlo opcional)
                 }
 
 				timeStamp = timeStamp + requestedFragmentSize;
@@ -368,7 +378,6 @@ void main(int argc, char *argv[])
 		        seqNum_actual = ntohs((*hdr_message).seq);
 
                 audioData = (char *)(hdr_message + 1);
-                memcpy(last_audioData, audioData, requestedFragmentSize);
 
                 if(seqNum_actual > seqNum_anterior){
 
@@ -383,38 +392,43 @@ void main(int argc, char *argv[])
                         if(K == 1){
 
                             if(K_t == 1){
-                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                             }else if(K_t > 1){
-                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks, SILENCE);
+                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                             }
                             
                         }else if(K > 1){
 
+                            printf ("s");fflush (stdout); //verbose(falta ponerlo opcional)
+
                             if (K_t == K){
 
                                 if(K_t < 4 && (timeStamp_anterior == timeStamp_timer)){ 
-                                    insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                                    insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks, X);
+                                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                                 }else {
-                                    insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                                    insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks, X);
+                                    check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                                 }
 
                             }else if(K_t > K){
-                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
-                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
+                                insert_repeated_packets(circular_buf, noise_pointer, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks, X);
+                                check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks, INSERT);
                             }
 
                         }
 
                         timeStamp_timer = timeStamp_actual;
+                        memcpy(last_audioData, audioData, requestedFragmentSize);
 
                     }
 
                     timeStamp_anterior = timeStamp_actual;
                     seqNum_anterior = seqNum_actual;
 
+                }else{
+                    printf ("d");fflush (stdout); //verbose(falta ponerlo opcional)
                 }
 
             }
@@ -439,6 +453,7 @@ void play(int descriptor, void *buffer, int size, unsigned int * current_blocks)
         printf ("Different number of bytes ( %d bytes, expected %d)\n", n_bytes, size);
     }else{
         (*current_blocks)--;
+        printf ("-");fflush (stdout); //verbose(falta ponerlo opcional)
     }
 }
 
@@ -479,7 +494,7 @@ void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardForm
 }
 
 
-void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks){
+void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmentSize, unsigned int K, unsigned int numberOfBlocks, unsigned int * current_blocks, int verbose_c){
 
     unsigned int i;
     int inserted_block;
@@ -492,7 +507,7 @@ void insert_repeated_packets(void* circular_buf, void* buf, int requestedFragmen
     
 
     for(i=0; i<K; i++){
-        inserted_block = check_write_cbuf(circular_buf, buf, requestedFragmentSize, current_blocks);
+        inserted_block = check_write_cbuf(circular_buf, buf, requestedFragmentSize, current_blocks, verbose_c);
         if(inserted_block == 0){
             break;
         }
@@ -564,11 +579,15 @@ int detect_silence(void *buf, int fragmentSize, int sndCardFormat){
 
     percentage_silence = (float)silence_frames / (float)num_frames;
 
+    if(percentage_silence > PMA){
+        printf ("_");fflush (stdout); //verbose(falta ponerlo opcional)
+    }
+
     return (percentage_silence > PMA);
     
 }
 
-int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks){
+int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsigned int * current_blocks, int verbose_c){
 
     void* to_write_pointer = cbuf_pointer_to_write (circular_buf);
     int inserted_block = 0;
@@ -577,13 +596,23 @@ int check_write_cbuf(void* circular_buf, void* content_pointer, int size, unsign
         memcpy(to_write_pointer, content_pointer, size);
         inserted_block = 1;
         (*current_blocks)++;
+        if(verbose_c == INSERT){
+            printf ("+");fflush (stdout); //verbose(falta ponerlo opcional)
+        }else if(verbose_c == SILENCE){
+            printf ("~");fflush (stdout); //verbose(falta ponerlo opcional)
+        }else if(verbose_c == TIMER){
+            printf ("t");fflush (stdout); //verbose(falta ponerlo opcional)
+        }else if(verbose_c == X){
+            printf ("x");fflush (stdout); //verbose(falta ponerlo opcional)
+        }
+        
     }
 
     return inserted_block;
 }
 
 
-float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){
+float get_diff_times(struct timeval* last_timeval, struct timeval* diff_times){ // cambiar para no meter diff_times
 
     struct timeval current_timeval;
     float secs;
