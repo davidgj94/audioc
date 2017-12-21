@@ -127,7 +127,7 @@ void main(int argc, char *argv[])
     unsigned int K = 0;
     unsigned int K_t = 0;
     int j_asdf = 0;
-    unsigned int num_times_timer = 0;
+    unsigned int timeStamp_timer = 0;
 
 
     /* we configure the signal */
@@ -263,12 +263,7 @@ void main(int argc, char *argv[])
                 audioData = (char *)(hdr_message + 1);
     
                 update_buffer(descriptorSnd, audioData, requestedFragmentSize);
-                // if(j_asdf%2){
-                //     printf("Impar -> mando\n");
-                //     easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
-                // }else{
-                //     printf("Par -> no mando\n");
-                // }
+                easy_send(buf_send, requestedFragmentSize + sizeof(rtp_hdr_t));
                 
                     
                 nseq = nseq + 1;
@@ -354,7 +349,8 @@ void main(int argc, char *argv[])
         }else if(res == 0){
             printf("Rellenando con silencios\n");
             check_write_cbuf(circular_buf, noise_pointer, requestedFragmentSize, &current_blocks);
-            num_times_timer++;
+            timeStamp_timer = timeStamp_timer + requestedFragmentSize;
+            //cambiar en el resto de sitios
 
         }else{
 
@@ -419,14 +415,14 @@ void main(int argc, char *argv[])
 
                     printf("K: %d\n", K);
                     printf("K_t: %d\n", K_t);
-
-                    if(K_t > 1){
-                        if(K_t > num_times_timer){
-                            num_blocks_to_write = K_t - num_times_timer - 1;
-                        }else{
-                            num_blocks_to_write = 0;
-                        }
-                    }
+                    //eliminar num_blocks_to_write
+                    // if(K_t > 1){
+                    //     if(K_t > num_times_timer){
+                    //         num_blocks_to_write = K_t - num_times_timer - 1;
+                    //     }else{
+                    //         num_blocks_to_write = 0;
+                    //     }
+                    // }
 
                     if(K == 1){
 
@@ -441,7 +437,7 @@ void main(int argc, char *argv[])
 
                         if (K_t == K){
 
-                            if(K_t < 4){
+                            if(K_t < 4 ){ //modificar tambien para no añadir si timeStamp_time != timestamp_actual
                                 insert_repeated_packets(circular_buf, last_audioData, requestedFragmentSize, num_blocks_to_write, numberOfBlocks, &current_blocks);
                                 check_write_cbuf(circular_buf, audioData, requestedFragmentSize, &current_blocks);
                             }else {
@@ -456,7 +452,6 @@ void main(int argc, char *argv[])
 
                     }
 
-                    num_times_timer = 0;
                     seqNum_anterior = seqNum_actual;
                     timeStamp_anterior = timeStamp_actual;
 
@@ -506,7 +501,7 @@ int ms2bytes(int duration, int rate, int channelNumber, int sndCardFormat){
     return numberOfSamples * bytesPerSample;
 }
 
-void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardFormat, struct timeval* timer){
+void reset_timer(int descriptorSnd, int rate, int channelNumber, int sndCardFormat, struct timeval* timer){ //meter también current_blocks
     int numBytes;
     ioctl(descriptorSnd, SNDCTL_DSP_GETODELAY, &numBytes);
     printf("numBytes es %d\n",numBytes);
